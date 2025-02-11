@@ -1,0 +1,39 @@
+version: "3"
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+  gigamain:
+    build: ./giga_main
+    ports:
+      - "3000:3000"
+    depends_on:
+      - rabbitmq
+  gigapayment:
+    build: ./giga_payment
+    ports:
+      - "4000:4000"
+    depends_on:
+      - rabbitmq
+  gigataximain:
+    build: ./giga_taxi_main
+    ports:
+      - "5000:5000"
+    depends_on:  
+      - rabbitmq
+  gigataxidriver:
+    build: ./giga_taxi_driver
+    ports:
+      - "6000:6000"
+    depends_on:
+      - rabbitmq
+  gigaecommercemain:
+    build: ./giga_ecommerce_main
+    ports:
+      - "7000:7000"
+    depends_on:
+      - rabbitmq
+
+  
