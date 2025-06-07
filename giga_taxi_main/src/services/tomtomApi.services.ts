@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { logger } from 'common';
 
 const apiKey = process.env.API_KEY as string;
 
 const getRoute = async (startLocation: string, endLocation: string) => {
-  console.log(apiKey);
+  logger.info(apiKey);
   
   const routingEndpoint = `https://api.tomtom.com/routing/1/calculateRoute/${startLocation}:${endLocation}/json`;
   try {
@@ -14,13 +15,13 @@ const getRoute = async (startLocation: string, endLocation: string) => {
     });
 
     const route = response.data.routes[0];
-    console.log('Route Summary:', route.summary);
+    logger.info('Route Summary: ' + JSON.stringify(route.summary));
 
     
 
    return route
   } catch (error) {
-    console.error('Error fetching route:', error);
+    logger.error('Error fetching route:', error);
   }
 }
 
@@ -35,7 +36,7 @@ const geocodeAddress = async (address: string) => {
     });
 
     const location = response.data.results[0].position;
-    console.log('Geocoded Location:', location);
+    logger.info('Geocoded Location: ' + JSON.stringify(location));
 
     // Sample Response:
     /*
@@ -44,7 +45,7 @@ const geocodeAddress = async (address: string) => {
     */
     return location
   } catch (error) {
-    console.error('Error geocoding address:', error);
+    logger.error('Error geocoding address:', error);
     
   }
 };

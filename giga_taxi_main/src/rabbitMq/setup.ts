@@ -1,4 +1,5 @@
 import amqp from "amqplib";
+import { logger } from 'common';
 
 //step 1 : Connect to the rabbitmq server
 //step 2 : Create a new channel on that connection
@@ -25,13 +26,9 @@ class Rabbit {
             )
         );
     
-        console.log(
-          `message sent`
-        );
+        logger.info(`message sent`);
     } catch (error) {
-        console.log(
-            `Error occured: ${error}`
-          );
+        logger.error(`Error occured: ${error}`);
     }
     
   }
@@ -46,7 +43,7 @@ class Rabbit {
   
       this.channel.consume(queueName, (msg: any) => {
         const data = JSON.parse(msg.content);
-        console.log(data);
+        logger.info(JSON.stringify(data));
         const message = data;
   
         // if you want to run a function with the message or just services texting each other

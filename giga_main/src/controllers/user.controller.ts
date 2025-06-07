@@ -13,7 +13,6 @@ class UserController {
 
   loginUser = catchAsync(async (req: Request, res: Response) => {
     const data = await userService.loginUser(req.body);
-
     res.status(httpStatus.CREATED).send({ message: data.message, data: data.data, status: true });
   });
 
@@ -38,22 +37,22 @@ class UserController {
   // });
 
   getUser = catchAsync(async (req: Request, res: Response) => {
-    const resp = await userService.getUser(req.body);
-    res.status(httpStatus.CREATED).send({ ...resp, status: true });
+    const resp = await userService.getUser(req.params.id);
+    res.status(httpStatus.OK).send({ ...resp, status: true });
   });
 
   addCard = catchAsync(async (req: Request, res: Response) => {
-    const resp = await userService.addCard(req.body);
+    const resp = await userService.addCard({ userId: req.params.id, card: req.body });
     res.status(httpStatus.CREATED).send({ ...resp, status: true });
   });
 
   rateUser = catchAsync(async (req: Request, res: Response) => {
-    const resp = await userService.rateUser(req.body);
+    const resp = await userService.rateUser({ userId: req.params.id, rating: req.body.rating });
     res.status(httpStatus.CREATED).send({ ...resp, status: true });
   });
 
   createTaxiAccount = catchAsync(async (req: Request, res: Response) => {
-    const resp = await userService.createTaxiAccount(req.body);
+    const resp = await userService.createTaxiAccount({ accountInfo: { ...req.body, user: req.params.id }, type: req.body.type });
     res.status(httpStatus.CREATED).send({ ...resp, status: true });
   });
 }

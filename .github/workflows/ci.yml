@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [giga_main, giga_taxi_main, giga_taxi_driver, advertisement-service, ecommerce-backend, hotel-service, payment-service]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: cd ${{ matrix.service }} && npm ci && cd ../common && npm ci
+      - name: Build
+        run: cd ${{ matrix.service }} && npm run build
+      - name: Lint
+        run: cd ${{ matrix.service }} && npm run lint
+      - name: Test
+        run: cd ${{ matrix.service }} && npm test

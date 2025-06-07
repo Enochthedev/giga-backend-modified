@@ -1,33 +1,17 @@
-import { NextFunction, Request, response, Response, Router } from "express";
-import UserController from "../controllers/user.controller";
+import { Router } from 'express';
+import UserController from '../controllers/user.controller';
 import validate from '../middleware/validate';
+import { authMiddleware } from 'common';
 import validations from '../validations';
-
+import { checkRole } from 'common';
 
 const router = Router();
 
-router
-  .route('/')
-  .post(validate(validations.users.createUser), UserController.createUser)
+router.post('/users', validate(validations.users.createUser), UserController.createUser);
+router.post('/auth/login', validate(validations.users.loginUser), UserController.loginUser);
+router.get('/users/:id', authMiddleware, checkRole(['customer', 'driver', 'admin']), UserController.getUser);
+router.post('/users/:id/cards', authMiddleware, checkRole(['customer']), UserController.addCard);
+router.post('/users/:id/ratings', authMiddleware, checkRole(['driver']), UserController.rateUser);
+router.post('/users/:id/taxi-account', authMiddleware, checkRole(['customer']), UserController.createTaxiAccount);
 
-router
-.route('/login')
-.post(validate(validations.users.loginUser), UserController.loginUser)
-
-
-router
-  .route('/getUser')
-  .post(UserController.getUser)
-
-router
-.route('/addCard')
-.post(UserController.addCard)
-
-router
-.route('/rateUser')
-.post(UserController.rateUser)
-
-router
-.route('/createTaxiAccount')
-.post(UserController.createTaxiAccount)
 export default router;

@@ -7,36 +7,36 @@ import rabbit from './rabbitMq/rabbitmq.services';
 import router from './routes/routesConfig';
 import cors from 'cors';
 import { errorConverter, errorHandler } from './middleware/error';
+import { redisRateLimit, logger, setupSwagger, initDb } from 'common';
 
 const app = express();
 const port = process.env.PORT || 6000;
 
 dotEnv.config();
-// Bodyparser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
- 
 app.use(cors());
-
+app.use(redisRateLimit());
+setupSwagger(app, 'Taxi Driver Service');
+initDb();
 app.use(router);
-
 app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
 });
 mongoose.connect(process.env.DB_HOST as string).catch((e) => {
-  console.log(e);
+  logger.error(e.message);
 });
-
 mongoose.connection.on('open', () => {
-  console.log('Mongoose Connection');
+  logger.info('Mongoose Connection');
 });
 
-rabbit.GetRideOffer()
-rabbit.getClosestDrivers()
-
+rabbit.GetRideOffer();
+rabbit.getClosestDrivers();
 app.use(errorConverter);
 app.use(errorHandler);
 
 app.listen(port, () => {
-  console.log(`ductape-apps-api application is running on port ${port}.`);
+  logger.info(`taxi driver listening on ${port}`);
 });
+
+export default app;

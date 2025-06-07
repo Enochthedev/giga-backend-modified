@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { logger } from 'common';
 
 interface Event {
   name: string;
@@ -40,11 +41,11 @@ export class EventSender {
         const url = `${serviceUrl}/${name}`;
         return axios.post(url, payload)
         .then(response => {
-            console.log('User created successfully:', response.data);
+            logger.info('User created successfully: ' + JSON.stringify(response.data));
             return response.data;
         })
         .catch(error => {
-            console.error('Error creating user:', error.message);
+            logger.error('Error creating user: ' + error.message);
             throw error;
         });
     }

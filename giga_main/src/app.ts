@@ -7,38 +7,40 @@ import admin from './services/admin.service';
 import httpStatus from 'http-status';
 import cors from 'cors';
 import { errorConverter, errorHandler } from './middleware/error';
+import { redisRateLimit, logger, setupSwagger, initDb } from 'common';
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 dotEnv.config();
-// Bodyparser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 app.use(cors());
-
+app.use(redisRateLimit());
+setupSwagger(app, 'User Service');
+initDb();
 app.use(router);
 app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
 });
 
 mongoose.connect(process.env.DB_HOST as string).catch((e) => {
-  console.log(e);
-}); 
+  logger.error(e.message);
+});
 
 mongoose.connection.on('open', () => {
-  console.log('Mongoose  Connection');
+  logger.info('Mongoose  Connection');
 });
 admin.createAdmin({
-  email: "default@default.com",
-  password: "defaultPass"
-}) 
-
+  email: 'default@default.com',
+  password: 'defaultPass'
+});
 
 app.use(errorConverter);
 app.use(errorHandler);
 
 app.listen(port, () => {
-  console.log(`giga-main-api application is running on port ${port}.`);
+  logger.info(`giga-main-api running on ${port}`);
 });
+
+export default app;
