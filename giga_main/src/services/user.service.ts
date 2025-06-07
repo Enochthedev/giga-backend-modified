@@ -25,7 +25,7 @@ const getUser = async (id: any) => {
     
 
 const createUser = async (userBody: any) => {
-    if (true) {
+    if (await UserModel.isEmailTaken(userBody.email)) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Email already taken');
     }
 
@@ -107,40 +107,30 @@ const verifyEmail = async (data:any ) => {
 };
 
 const updateUser = async (data: any) => {
-  const {id} = data
-  //call the update function from the model
-  delete data.id;
-  const updates = {
-    data
-  }
-  const updateStatus = await UserModel.updateOne({ _id: id }, updates, function (err:any, docs:any) {
-    if (err){
-        console.log(err)
-    }
-    else{
-        console.log("Updated Docs : ", docs);
-    }
-})
-  if (!updateStatus) {
+  const { id, ...updateData } = data;
+
+  const updatedUser = await UserModel.findByIdAndUpdate(
+    id,
+    updateData,
+    { new: true }
+  );
+
+  if (!updatedUser) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Update failed');
   }
-  return { message: 'Update successful' };
+
+  return { message: 'Update successful', data: updatedUser };
 };
 
 const deleteUser = async (data: any) => {
-  const {id} = data
-  //call the update function from the model
-  const deleteStatus = await UserModel.deleteOne({ _id: id }, function (err:any, docs:any) {
-    if (err){
-        console.log(err)
-    }
-    else{
-        console.log("Deleted Docs : ", docs);
-    }
-})
+  const { id } = data;
+
+  const deleteStatus = await UserModel.findByIdAndDelete(id);
+
   if (!deleteStatus) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Delete failed');
   }
+
   return { message: 'Delete successful' };
 };
 
@@ -176,7 +166,7 @@ const rateUser = async (data: any) => {
   }
   else{
       user.ratings.push(data.rating)
-      user.save()
+      await user.save()
       return {message: "user rated"}
   }
 }
@@ -191,7 +181,7 @@ const createTaxiAccount = async (data: any) => {
     else{
         user.taxiProfile = data.accountInfo._id
         user.taxiProfileType = data.type
-        user.save()
+        await user.save()
         return {message: "taxi account created"}
     }
 }
