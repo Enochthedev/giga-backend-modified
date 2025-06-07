@@ -29,21 +29,19 @@ const createAdmin = async (adminBody: any) => {
 };
 
 const updateAdmin = async (data: any) => {
-  const {id} = data
-  delete data.id;
-  const updates = {
-    data
+  const { id, ...updateData } = data;
+
+  const updatedAdmin = await AdminModel.findByIdAndUpdate(
+    id,
+    updateData,
+    { new: true }
+  );
+
+  if (!updatedAdmin) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Admin not found');
   }
-  await AdminModel.updateOne({ _id: id }, updates, function (err:any, docs:any) {
-    if (err){
-        console.log(err)
-    }
-    else{
-        console.log("Updated Docs : ", docs);
-    }
-})
-  
-  return AdminModel.create(data);
+
+  return updatedAdmin;
 };
 
 const loginAdmin = async (data: any) => {
