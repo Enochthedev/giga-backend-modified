@@ -2,6 +2,7 @@ import Rabbit from './setup';
 import TaxiModel from '../models/taxiDriver.model';
 import RideModel from '../models/ride.model';
 import tomtomApiServices from '../services/tomtomApi.services';
+import { logger } from 'common';
 
 const rabbit = new Rabbit();  
 
@@ -53,7 +54,7 @@ const GetRideOffer = async (data: any) => {
             }
         } 
         } catch (error) {
-          console.log(error);
+          logger.error(error);
           
 
         }
@@ -87,12 +88,12 @@ const getClosestDrivers = async (data: any) => {
       const finalDrivers = await TaxiModel.find(driverQuery)
         .limit(limit)
         .exec();
-      console.log(finalDrivers)
+      logger.info(JSON.stringify(finalDrivers))
 
       return finalDrivers;
     } catch (error) {
       // Handle any errors
-      console.error('Error finding final drivers:', error);
+      logger.error('Error finding final drivers: ' + error);
       throw new Error("Error finding final drivers");
     }
   }
@@ -100,10 +101,10 @@ const getClosestDrivers = async (data: any) => {
     const { location, ridePreference } = data; // Assuming ridePreference is included in the data
     findFinalDrivers(location, 5, ridePreference)
       .then((drivers) => {
-        console.log(drivers);
+        logger.info(JSON.stringify(drivers));
       })
       .catch((error) => {
-        console.log(error);
+        logger.error(error);
       });
   }
 

@@ -1,7 +1,7 @@
 import UserModel from '../models/user.model';
 import httpStatus from 'http-status';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import { signAccessToken, signRefreshToken } from 'common';
 import ApiError from '../utils/ApiError';
 import moment from 'moment';
 import { randomString } from '../utils/util';
@@ -62,20 +62,15 @@ const loginUser = async (data: any) => {
       throw new ApiError(httpStatus.UNAUTHORIZED, 'Email or password invalid');
     }
   
-    const token = jwt.sign(
-      {
-        email: user.email,
-        _id: user._id,
-        userName: user.userName,
-      },
-      process.env.JWT_SECRET as string,
-      // { expiresIn: '7d' },
-    );
+    const payload = { id: user.id, email: user.email, role: user.taxiProfileType };
+    const token = signAccessToken(payload);
+    const refreshToken = signRefreshToken(payload);
   
     return {
       message: 'Login successful',
       data: {
         token,
+        refreshToken,
         user: {
           email: user.email,
           userName: user.userName,
@@ -199,3 +194,4 @@ export default {
     rateUser,
     createTaxiAccount,
   };
+

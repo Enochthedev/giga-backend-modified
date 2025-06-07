@@ -4,6 +4,7 @@ import httpStatus from 'http-status';
 import { EventSender } from '../utils/eventSystem'; 
 import ApiError from '../utils/ApiError';
 import tomtomApiServices from './tomtomApi.services';
+import { logger } from 'common';
 const eventSender = new EventSender();
 
 
@@ -138,7 +139,7 @@ const rateCustomer = async(data: any) =>
       });
       return {message: "Rated"}
     } catch (error) {
-      console.log(error)
+      logger.error(error);
       throw new ApiError(httpStatus.BAD_REQUEST, 'Something went Wrong');
     }
     
@@ -171,12 +172,12 @@ const getClosestDrivers = async (data: any) => {
       const finalDrivers = await Driver.find(driverQuery)
         .limit(limit)
         .exec();
-      console.log(finalDrivers)
+      logger.info(JSON.stringify(finalDrivers))
 
       return finalDrivers;
     } catch (error) {
       // Handle any errors
-      console.error('Error finding final drivers:', error);
+      logger.error('Error finding final drivers: ' + error);
       throw new Error("Error finding final drivers");
     }
   }
@@ -231,7 +232,7 @@ const getClosestDrivers = async (data: any) => {
         }
     } 
     } catch (error) {
-      console.log(error);
+      logger.error(error);
       throw new Error("An Error occured");
     }
 }

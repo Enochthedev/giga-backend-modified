@@ -4,7 +4,10 @@
     "target": "es6",
     "rootDir": "./",
     "esModuleInterop": true,
-    "lib": ["es6", "DOM"],
+    "lib": [
+      "es6",
+      "DOM"
+    ],
     "outDir": "build",
     "allowJs": true,
     "checkJs": false,
@@ -18,8 +21,16 @@
       "@types/express/index.d.ts"
     ],
     "paths": {
-      "*": ["./*", "./src/*"]
-    }
+      "common/*": [
+        "../common/src/*"
+      ]
+    },
+    "baseUrl": "."
   },
-  "exclude": ["src/node_modules", "dist", "./lib", "build"]
+  "exclude": [
+    "src/node_modules",
+    "dist",
+    "./lib",
+    "build"
+  ]
 }

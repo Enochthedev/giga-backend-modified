@@ -1,10 +1,8 @@
-import { Router } from "express";
-import ridesApi from "./ride.route";
-
+import { Router } from 'express';
+import ridesApi from './ride.route';
 
 const router = Router();
-router.use("/driver/v1", ridesApi);
-
-
+router.get('/health', (_, res) => res.status(200).send('ok'));
+router.use('/api/v1', ridesApi);
 
 export default router;

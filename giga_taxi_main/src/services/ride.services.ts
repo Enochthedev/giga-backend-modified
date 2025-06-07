@@ -5,6 +5,7 @@ import { EventSender } from '../utils/eventSystem';
 import ApiError from '../utils/ApiError';
 import tomtomApi from './tomtomApi.services';
 import rideConfig from '../config/ride.config';
+import { logger } from 'common';
 const eventSender = new EventSender();
 
  
@@ -60,7 +61,7 @@ const requestRide = async (data: any) => {
         
     } 
     catch (error) {
-        console.log(error)
+        logger.error(error);
         throw new ApiError(httpStatus.BAD_REQUEST, 'Something went wrong');
     }
 };
@@ -92,7 +93,7 @@ const sortLocationData = async(data: any) =>
         const location = await tomtomApi.geocodeAddress(data)
         return location
       } catch (error) {
-        console.log(error)
+        logger.error(error);
         return data
       }
         
@@ -105,7 +106,7 @@ const sortLocationData = async(data: any) =>
 const getClosestDrivers = async(data: any) => 
 {
     const location = data.pickupLocation
-    console.log(location,data.pickupLocation );
+    logger.info(location as any);
     
     const requestPayload = {
         location,
@@ -122,7 +123,7 @@ const getClosestDrivers = async(data: any) =>
       })) as any
       return drivers
     } catch (error) {
-      console.log(error);
+      logger.error(error);
       return "error occured"
     }
     
@@ -157,7 +158,7 @@ const createTaxiAccount = async (data: any) => {
 
       return customer
     } catch (error) {
-      console.log(error);
+      logger.error(error);
       throw new ApiError(httpStatus.BAD_REQUEST, 'Something went wrong and it was your fault, BAD_REQUEST');
     }
     
@@ -173,7 +174,7 @@ const payTaxiFee = async (data: any) => {
     })
     return taxiCustomer;
   } catch (error) {
-    console.error('Error fetching TaxiCustomer:', error);
+    logger.error('Error fetching TaxiCustomer:', error);
     return null;
   }
 };

@@ -1,4 +1,13 @@
 services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - backend-network
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -31,15 +40,15 @@ services:
 
   ecommerce-service:
     build:
-      context: ./ecommerce-service
+      context: ./ecommerce-backend
     container_name: ecommerce-service
     ports:
       - "4000:4000"
     depends_on:
-      - mongo
+      - postgres
       - rabbitmq
     environment:
-      DATABASE_URL: mongodb://mongo:27017/ecommerce
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
       RABBITMQ_URL: amqp://rabbitmq
     networks:
       - backend-network
@@ -51,10 +60,10 @@ services:
     ports:
       - "4001:4001"
     depends_on:
-      - mongo
+      - postgres
       - rabbitmq
     environment:
-      DATABASE_URL: mongodb://mongo:27017/hotel
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
       RABBITMQ_URL: amqp://rabbitmq
     networks:
       - backend-network
@@ -66,10 +75,10 @@ services:
     ports:
       - "4002:4002"
     depends_on:
-      - mongo
+      - postgres
       - rabbitmq
     environment:
-      DATABASE_URL: mongodb://mongo:27017/payment
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
       RABBITMQ_URL: amqp://rabbitmq
     networks:
       - backend-network
@@ -81,10 +90,10 @@ services:
     ports:
       - "4003:4003"
     depends_on:
-      - mongo
+      - postgres
       - rabbitmq
     environment:
-      DATABASE_URL: mongodb://mongo:27017/advertisements
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
       RABBITMQ_URL: amqp://rabbitmq
     networks:
       - backend-network

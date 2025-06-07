@@ -16,7 +16,6 @@ package-lock.json
 yarn.lock
 
 # temporary files that cant be pushed yet (ci/cd)
-.github/workflows
 ```
 .VSCodeCounter
 

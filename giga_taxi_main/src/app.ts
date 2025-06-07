@@ -7,39 +7,35 @@ import router from './routes/routesConfig';
 import cors from 'cors';
 import { errorConverter, errorHandler } from './middleware/error';
 import rabbit from './rabbitMq/rabbitmq.services';
+import { redisRateLimit, logger, setupSwagger, initDb } from 'common';
 
 const app = express();
 const port = process.env.PORT || 5000;
 
 dotEnv.config();
-// Bodyparser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 app.use(cors());
-
+app.use(redisRateLimit());
+setupSwagger(app, 'Taxi Main Service');
+initDb();
 app.use(router);
-/* This code is creating a middleware function that will be executed for any incoming request that does
-not match any of the defined routes. It creates a new instance of the `ApiError` class with a
-`NOT_FOUND` status code and a message of `'Not found'`, and passes it to the `next` function. This
-will trigger the error handling middleware to handle the error and send an appropriate response to
-the client. */
 app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
 });
 mongoose.connect(process.env.DB_HOST as string).catch((e) => {
-  console.log(e);
+  logger.error(e.message);
 });
-
 mongoose.connection.on('open', () => {
-  console.log('Mongoose Connection');
+  logger.info('Mongoose Connection');
 });
 
-rabbit.DriverEndTrip()
-
-app.use(errorConverter); 
+rabbit.DriverEndTrip();
+app.use(errorConverter);
 app.use(errorHandler);
 
 app.listen(port, () => {
-  console.log(`ductape-apps-api application is now running on port ${port}.`);
+  logger.info(`taxi main listening on ${port}`);
 });
+
+export default app;
