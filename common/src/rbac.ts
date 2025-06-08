@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
-export type Role = 'admin' | 'driver' | 'vendor' | 'customer';
+export type Role = 'admin' | 'subadmin' | 'driver' | 'vendor' | 'customer';
 
 export function checkRole(roles: Role[]) {
   return (req: Request, res: Response, next: NextFunction) => {

@@ -12,7 +12,11 @@ export function basicRateLimit() {
 }
 
 export function redisRateLimit() {
-  const client = createClient({ url: process.env.REDIS_URL || 'redis://redis:6379' });
+  const redisEnv = process.env.REDIS_URL;
+  if (!redisEnv) {
+    throw new Error('REDIS_URL not set');
+  }
+  const client = createClient({ url: redisEnv });
   client.connect().catch(() => {});
   return rateLimit({
     windowMs: 60 * 1000,

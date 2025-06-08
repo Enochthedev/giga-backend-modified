@@ -16,4 +16,17 @@ router.post('/payments', authMiddleware, checkRole(['customer']), (_req, res) =>
   res.status(201).json({ message: 'Payment processed' });
 });
 
+/**
+ * @openapi
+ * /payments:
+ *   get:
+ *     summary: List payments
+ *     responses:
+ *       200:
+ *         description: OK
+ */
+router.get('/payments', authMiddleware, (_req, res) => {
+  res.json([{ id: 1, amount: 100 }]);
+});
+
 export default router;
