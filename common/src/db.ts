@@ -1,8 +1,12 @@
 import { Pool } from 'pg';
 import logger from './logger';
 
+const connEnv = process.env.DATABASE_URL;
+if (!connEnv) {
+  throw new Error('DATABASE_URL not set');
+}
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@postgres:5432/postgres'
+  connectionString: connEnv
 });
 
 export async function initDb() {
