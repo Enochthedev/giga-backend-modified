@@ -8,6 +8,7 @@ import httpStatus from 'http-status';
 import cors from 'cors';
 import { errorConverter, errorHandler } from './middleware/error';
 import { redisRateLimit, logger, setupSwagger, initDb } from 'common';
+import passport from './services/oauth.service';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -17,6 +18,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 app.use(redisRateLimit());
+
+// Initialize Passport
+app.use(passport.initialize());
+
 setupSwagger(app, 'User Service');
 initDb();
 app.use(router);

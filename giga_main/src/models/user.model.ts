@@ -2,34 +2,49 @@ import mongoose, { Document, Model, Schema, Types } from 'mongoose';
 import validator from 'validator';
 import bcrypt from 'bcryptjs';
 
-
-
 /* This is defining an interface for the User model in the Mongoose schema. It extends the Document
 interface provided by Mongoose and adds additional properties and methods specific to the User
 model. These properties include name, userName, email, password, createdAt, and updatedAt. The
 methods include isPasswordMatch, isEmailTaken, and isUserNameTaken, which are used to check if a
 given password, email, or username is already taken in the database. */
 interface IUser extends Document {
-  profilePicture: string;// this will be a url using cloudinary
+  // Profile Information
+  profilePicture: string; // Cloudinary URL
   firstName: string;
   lastName: string;
   otherNames: string;
   userName: string;
   email: string;
-  address: string;// might make this an object 
-  zipCode: number;
-  gender: string;
+  
+  // Address Information
   country: string;
-  //uneeded but its on the figma design
-  bodyWeight: number;
-  areaOfInterest: string;
+  address: string;
+  street: string;
+  city: string;
+  zipCode: string;
+  
+  // Personal Information
+  gender: string;
+  weight: number;
+  maritalStatus: string;
   ageGroup: string;
-  [key: string]: any;
-
-  //check if this is the right type
-  password: string;
+  areaOfInterest: string;
+  
+  // Authentication fields
+  password?: string; // Optional for OAuth users
+  oauthProvider?: string; // 'google', 'apple', or undefined for email/password
+  oauthId?: string; // OAuth provider's user ID
+  oauthAccessToken?: string; // OAuth access token
+  oauthRefreshToken?: string; // OAuth refresh token
+  
+  // OTP Verification
+  otpCode?: string;
+  otpExpires?: Date;
+  isPhoneVerified: boolean;
+  
+  // Other fields
   creditCard?: mongoose.Types.ObjectId;
-  phoneNumber: Number;
+  phoneNumber: string;
   ratings: number[];
   averageRating: number;
   emailVerificationToken: String;
@@ -39,35 +54,45 @@ interface IUser extends Document {
   taxiProfileType: String;
   createdAt: Date;
   updatedAt: Date;
+  
+  // Methods
   isPasswordMatch(password: string): Promise<boolean>;
   isEmailTaken(email: string, excludeUserId?: string): Promise<boolean>;
   isUserNameTaken(userName: string, excludeUserId?: string): Promise<boolean>;
-  isPasswordMatch(password: string): Promise<boolean>;
+  isPhoneNumberTaken(phoneNumber: string, excludeUserId?: string): Promise<boolean>;
   updatePassword(password: string): Promise<void>;
   updateProfile(updateBody: any): Promise<IUser>;
+  generateOTP(): Promise<string>;
+  verifyOTP(otp: string): Promise<boolean>;
 }
 
-/* This interface is extending the Mongoose Model interface for the User model and adding two static
-methods: `isEmailTaken` and `isUserNameTaken`. These methods are used to check if a given email or
-username is already taken in the database, and they take an optional `excludeUserId` parameter to
-exclude a specific user from the search. The methods return a Promise that resolves to a boolean
-value indicating whether the email or username is taken or not. */
+/* This interface is extending the Mongoose Model interface for the User model and adding static
+methods: `isEmailTaken`, `isUserNameTaken`, and `isPhoneNumberTaken`. These methods are used to check if a
+given email, username, or phone number is already taken in the database, and they take an optional
+`excludeUserId` parameter to exclude a specific user from the search. The methods return a Promise
+that resolves to a boolean value indicating whether the email, username, or phone number is taken or not. */
 interface IUserModel extends Model<IUser> {
   isEmailTaken(email: string, excludeUserId?: string): Promise<boolean>;
   isUserNameTaken(userName: string, excludeUserId?: string): Promise<boolean>;
+  isPhoneNumberTaken(phoneNumber: string, excludeUserId?: string): Promise<boolean>;
+  findByOAuthId(provider: string, oauthId: string): Promise<IUser | null>;
 }
 
 const userSchema = new mongoose.Schema<IUser>(
   {
+    // Profile Information
     firstName: {
       type: String,
       required: true,
+      trim: true,
     },
     lastName: {
       type: String,
+      trim: true,
     },
     otherNames: {
       type: String,
+      trim: true,
     },
     userName: {
       type: String, 
@@ -87,20 +112,112 @@ const userSchema = new mongoose.Schema<IUser>(
         message: 'Invalid email',
       },
     },
-    address: {
-      type: String,
-      required: true,
-    },
-    zipCode: {
-      type: Number,
-      required: true,
-    },
-    password: {
+    
+    // Address Information
+    country: {
       type: String,
       required: true,
       trim: true,
-      minlength: 8,
     },
+    address: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    street: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    city: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    zipCode: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    
+    // Personal Information
+    gender: {
+      type: String,
+      required: true,
+      enum: ['male', 'female', 'other', 'prefer-not-to-say'],
+    },
+    weight: {
+      type: Number,
+      required: true,
+      min: 20,
+      max: 500,
+    },
+    maritalStatus: {
+      type: String,
+      required: true,
+      enum: ['single', 'married', 'divorced', 'widowed', 'prefer-not-to-say'],
+    },
+    ageGroup: {
+      type: String,
+      required: true,
+      enum: ['18-24', '25-34', '35-44', '45-54', '55-64', '65+'],
+    },
+    areaOfInterest: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    
+    // Profile Picture
+    profilePicture: {
+      type: String,
+      default: '',
+    },
+    
+    // Authentication
+    password: {
+      type: String,
+      trim: true,
+      minlength: 8,
+      // Password is required only for email/password users, not for OAuth users
+      required: function() {
+        return !this.oauthProvider;
+      }
+    },
+    oauthProvider: {
+      type: String,
+      enum: ['google', 'apple'],
+      required: false,
+    },
+    oauthId: {
+      type: String,
+      required: false,
+      sparse: true, // Allows multiple null values
+    },
+    oauthAccessToken: {
+      type: String,
+      required: false,
+    },
+    oauthRefreshToken: {
+      type: String,
+      required: false,
+    },
+    
+    // OTP Verification
+    otpCode: {
+      type: String,
+      required: false,
+    },
+    otpExpires: {
+      type: Date,
+      required: false,
+    },
+    isPhoneVerified: {
+      type: Boolean,
+      default: false,
+    },
+    
+    // Email Verification
     emailVerificationToken: {
       type: String,
     },
@@ -111,17 +228,30 @@ const userSchema = new mongoose.Schema<IUser>(
       type: Boolean,
       default: false,
     },
+    
+    // Phone Number
     phoneNumber: {
-      type: Number,
+      type: String,
       required: true,
       unique: true,
+      trim: true,
+      validate: {
+        validator: (value: string) => /^\+?[\d\s\-\(\)]+$/.test(value),
+        message: 'Invalid phone number format',
+      },
     },
+    
+    // Ratings & Reviews
     ratings: [{ type: Number, default: [] }],
     averageRating: { type: Number, default: 0 },
+    
+    // Payment Integration
     creditCard: {
       type: String,
       ref: 'CreditCard',
     },
+    
+    // Taxi Service Integration
     taxiProfile: {
       type: Schema.Types.ObjectId,
       ref: 'taxiProfileType',
@@ -133,13 +263,18 @@ const userSchema = new mongoose.Schema<IUser>(
       enum: ['TaxiDriver', 'TaxiCustomer'],
       default: 'TaxiCustomer'
     }
-    //we will add other fields for like other services like social_media_friends or followers and what not
   },
   
   {
     timestamps: true,
   }
 );
+
+// Compound index for OAuth lookups
+userSchema.index({ oauthProvider: 1, oauthId: 1 }, { sparse: true });
+
+// Index for phone number lookups
+userSchema.index({ phoneNumber: 1 }, { unique: true });
 
 userSchema.statics.isEmailTaken = async function (email: string, excludeUserId: string): Promise<boolean> {
   email = email.toLowerCase();
@@ -153,8 +288,18 @@ userSchema.statics.isUserNameTaken = async function (userName: string, excludeUs
   return !!user;
 };
 
+userSchema.statics.isPhoneNumberTaken = async function (phoneNumber: string, excludeUserId): Promise<boolean> {
+  const user = await this.findOne({ phoneNumber, _id: { $ne: excludeUserId } });
+  return !!user;
+};
+
+userSchema.statics.findByOAuthId = async function (provider: string, oauthId: string): Promise<IUser | null> {
+  return this.findOne({ oauthProvider: provider, oauthId: oauthId });
+};
+
 userSchema.methods.isPasswordMatch = async function (password: string): Promise<boolean> {
   const user = this as IUser;
+  if (!user.password) return false; // OAuth users don't have passwords
   return bcrypt.compare(password, user.password);
 }; 
 
@@ -164,6 +309,38 @@ userSchema.methods.updatePassword = async function (password: string): Promise<v
   await user.save();
 };
 
+userSchema.methods.generateOTP = async function (): Promise<string> {
+  const user = this as IUser;
+  const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+  user.otpCode = otp;
+  user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiration
+  await user.save();
+  return otp;
+};
+
+userSchema.methods.verifyOTP = async function (otp: string): Promise<boolean> {
+  const user = this as IUser;
+  if (!user.otpCode || !user.otpExpires) return false;
+  
+  if (new Date() > user.otpExpires) {
+    // OTP expired
+    user.otpCode = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+    return false;
+  }
+  
+  if (user.otpCode === otp) {
+    // OTP verified
+    user.isPhoneVerified = true;
+    user.otpCode = undefined;
+    user.otpExpires = undefined;
+    await user.save();
+    return true;
+  }
+  
+  return false;
+};
 
 //still needs to be tested
 userSchema.methods.updateProfile = async function (updateBody: any): Promise<IUser> {
@@ -189,12 +366,19 @@ userSchema.methods.updateProfile = async function (updateBody: any): Promise<IUs
   return user;
 };
 
-
 userSchema.pre('save', async function (next) {
   const user = this as IUser;
-  if (user.isModified('password')) {
+  
+  // Only hash password if it's modified and exists (for email/password users)
+  if (user.isModified('password') && user.password) {
     user.password = await bcrypt.hash(user.password, 8);
   }
+  
+  // For OAuth users, mark email as verified
+  if (user.oauthProvider && !user.isEmailVerified) {
+    user.isEmailVerified = true;
+  }
+  
   if (user.isModified('ratings')) {
     // Calculate the average rating based on the list of ratings
     const totalRatings = user.ratings.length;
