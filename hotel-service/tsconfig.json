@@ -6,11 +6,7 @@
     "esModuleInterop": true,
     "strict": true,
     "baseUrl": ".",
-    "paths": {
-      "common/*": [
-        "../common/src/*"
-      ]
-    }
+    "moduleResolution": "node"
   },
   "include": [
     "src/**/*"

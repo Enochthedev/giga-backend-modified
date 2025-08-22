@@ -1,14 +1,14 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
     "target": "es6",
-    "rootDir": "./",
+    "module": "commonjs",
+    "rootDir": "./src",
     "esModuleInterop": true,
     "lib": [
       "es6",
       "DOM"
     ],
-    "outDir": "build",
+    "outDir": "./build",
     "allowJs": true,
     "checkJs": false,
     "experimentalDecorators": true,
@@ -27,6 +27,9 @@
     },
     "baseUrl": "."
   },
+  "include": [
+    "src/**/*"
+  ],
   "exclude": [
     "src/node_modules",
     "dist",

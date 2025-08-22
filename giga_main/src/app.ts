@@ -24,13 +24,14 @@ app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
 });
 
-mongoose.connect(process.env.DB_HOST as string).catch((e) => {
+mongoose.connect(process.env.MONGODB_URL || 'mongodb://mongo:27017/giga').catch((e) => {
   logger.error(e.message);
 });
 
 mongoose.connection.on('open', () => {
-  logger.info('Mongoose  Connection');
+  logger.info('Mongoose Connection');
 });
+
 admin.createAdmin({
   email: 'default@default.com',
   password: 'defaultPass'

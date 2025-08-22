@@ -10,7 +10,7 @@ import rabbit from './rabbitMq/rabbitmq.services';
 import { redisRateLimit, logger, setupSwagger, initDb } from 'common';
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 3001;
 
 dotEnv.config();
 app.use(express.json());
@@ -23,9 +23,11 @@ app.use(router);
 app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
 });
-mongoose.connect(process.env.DB_HOST as string).catch((e) => {
+
+mongoose.connect(process.env.MONGODB_URL || 'mongodb://mongo:27017/giga').catch((e) => {
   logger.error(e.message);
 });
+
 mongoose.connection.on('open', () => {
   logger.info('Mongoose Connection');
 });

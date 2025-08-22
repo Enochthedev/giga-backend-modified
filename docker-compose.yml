@@ -38,9 +38,77 @@ services:
     networks:
       - backend-network
 
+  giga-main:
+    build:
+      context: .
+      dockerfile: giga_main/Dockerfile
+    container_name: giga-main
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - mongo
+      - redis
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      RABBITMQ_URL: amqp://rabbitmq
+      MONGODB_URL: mongodb://mongo:27017/giga
+      JWT_SECRET: example_jwt_secret
+      REFRESH_SECRET: example_refresh_secret
+      REDIS_URL: redis://redis:6379
+    networks:
+      - backend-network
+
+  giga-taxi-main:
+    build:
+      context: .
+      dockerfile: giga_taxi_main/Dockerfile
+    container_name: giga-taxi-main
+    ports:
+      - "3002:3001"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - mongo
+      - redis
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      RABBITMQ_URL: amqp://rabbitmq
+      MONGODB_URL: mongodb://mongo:27017/giga
+      JWT_SECRET: example_jwt_secret
+      REFRESH_SECRET: example_refresh_secret
+      REDIS_URL: redis://redis:6379
+    networks:
+      - backend-network
+
+  giga-taxi-driver:
+    build:
+      context: .
+      dockerfile: giga_taxi_driver/Dockerfile
+    container_name: giga-taxi-driver
+    ports:
+      - "6000:6000"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - mongo
+      - redis
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      RABBITMQ_URL: amqp://rabbitmq
+      MONGODB_URL: mongodb://mongo:27017/giga
+      JWT_SECRET: example_jwt_secret
+      REFRESH_SECRET: example_refresh_secret
+      REDIS_URL: redis://redis:6379
+      DB_HOST: mongodb://mongo:27017/giga
+    networks:
+      - backend-network
+
   ecommerce-service:
     build:
-      context: ./ecommerce-backend
+      context: .
+      dockerfile: ecommerce-backend/Dockerfile
     container_name: ecommerce-service
     ports:
       - "4000:4000"
@@ -58,7 +126,8 @@ services:
 
   hotel-service:
     build:
-      context: ./hotel-service
+      context: .
+      dockerfile: hotel-service/Dockerfile
     container_name: hotel-service
     ports:
       - "4001:4001"
@@ -76,7 +145,8 @@ services:
 
   payment-service:
     build:
-      context: ./payment-service
+      context: .
+      dockerfile: payment-service/Dockerfile
     container_name: payment-service
     ports:
       - "4002:4002"
@@ -94,7 +164,8 @@ services:
 
   advertisement-service:
     build:
-      context: ./advertisement-service
+      context: .
+      dockerfile: advertisement-service/Dockerfile
     container_name: advertisement-service
     ports:
       - "4003:4003"
@@ -116,6 +187,9 @@ services:
     ports:
       - "80:80"
     depends_on:
+      - giga-main
+      - giga-taxi-main
+      - giga-taxi-driver
       - ecommerce-service
       - hotel-service
       - payment-service

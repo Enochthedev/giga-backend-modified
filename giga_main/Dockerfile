@@ -1,16 +1,27 @@
-FROM node:16
+FROM node:18
+WORKDIR /app
 
-# create the app and node modules folder with the right permissions to allow future npm install
-RUN mkdir -p /home/app/node_modules && chown -R node:node /home/app
-WORKDIR /home/app
-# copy the package.json file before the rest of the code to take advantage of Docker layer caching
-COPY package*.json ./
-# Switch user to node to ensure that all application files are owned by none root user node
-USER node
-RUN yarn install
-# copy the rest of the application files and set the right user permissions
-COPY --chown=node:node . .
-# build application in the current working directory
-RUN yarn build
-EXPOSE 8080
-CMD [ "sh", "-c", "yarn start:prod"]
+# Copy and build common module first
+COPY common ./common
+WORKDIR /app/common
+RUN npm install
+RUN npm run build
+
+# Return to app directory and install dependencies
+WORKDIR /app
+COPY giga_main/package.json ./
+COPY giga_main/tsconfig.json ./
+RUN npm install
+
+# Install common module's dependencies in the main container
+RUN npm install winston express-rate-limit rate-limit-redis redis swagger-jsdoc swagger-ui-express jsonwebtoken pg
+
+# Copy source code and build
+COPY giga_main/src ./src
+RUN npm run build
+
+# Copy the built common module to node_modules so it's available at runtime
+RUN rm -rf node_modules/common && mkdir -p node_modules/common && cp -r common/build/* node_modules/common/
+
+EXPOSE 3000
+CMD ["node", "build/app.js"]

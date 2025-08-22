@@ -23,15 +23,29 @@ app.use(router);
 app.use((req, res, next) => {
   next(new ApiError(httpStatus.NOT_FOUND, 'Not found'));
 });
+
 mongoose.connect(process.env.DB_HOST as string).catch((e) => {
   logger.error(e.message);
 });
+
 mongoose.connection.on('open', () => {
   logger.info('Mongoose Connection');
 });
 
-rabbit.GetRideOffer();
-rabbit.getClosestDrivers();
+// Set up RabbitMQ consumers properly
+// These will wait for messages instead of trying to process undefined data
+setTimeout(() => {
+  try {
+    // Set up consumer for ride offers - this will wait for messages
+    rabbit.consumeMessage('GetRideOffer', rabbit.GetRideOffer);
+    // Set up consumer for finding closest drivers - this will wait for messages  
+    rabbit.consumeMessage('GetClosestDrivers', rabbit.getClosestDrivers);
+    logger.info('RabbitMQ consumers set up successfully');
+  } catch (error) {
+    logger.error('Error setting up RabbitMQ consumers:', error);
+  }
+}, 5000); // Wait 5 seconds for RabbitMQ to be ready
+
 app.use(errorConverter);
 app.use(errorHandler);
 

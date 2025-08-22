@@ -1,22 +1,20 @@
-import { Router } from 'express';
-import { createAd, listAds, getAd, deleteAd, updateAd, serveAd } from '../adsRepo';
-
-const router = Router();
-
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const adsRepo_1 = require("../adsRepo");
+const router = (0, express_1.Router)();
 // Simple middleware functions for now
-const authMiddleware = (req: any, res: any, next: any) => {
-  // For now, just pass through - no actual auth
-  req.userData = { id: 'test-user' };
-  next();
-};
-
-const checkRole = (roles: string[]) => {
-  return (req: any, res: any, next: any) => {
-    // For now, just pass through - no actual role checking
+const authMiddleware = (req, res, next) => {
+    // For now, just pass through - no actual auth
+    req.userData = { id: 'test-user' };
     next();
-  };
 };
-
+const checkRole = (roles) => {
+    return (req, res, next) => {
+        // For now, just pass through - no actual role checking
+        next();
+    };
+};
 /**
  * @openapi
  * /ads:
@@ -27,12 +25,12 @@ const checkRole = (roles: string[]) => {
  *         description: Created
  */
 router.post('/ads', authMiddleware, checkRole(['vendor']), async (req, res) => {
-  const { title, content } = req.body;
-  if (!title || !content) return res.status(400).json({ message: 'Missing fields' });
-  const ad = await createAd(title, content, (req as any).userData.id);
-  res.status(201).json(ad);
+    const { title, content } = req.body;
+    if (!title || !content)
+        return res.status(400).json({ message: 'Missing fields' });
+    const ad = await (0, adsRepo_1.createAd)(title, content, req.userData.id);
+    res.status(201).json(ad);
 });
-
 /**
  * @openapi
  * /ads:
@@ -43,10 +41,9 @@ router.post('/ads', authMiddleware, checkRole(['vendor']), async (req, res) => {
  *         description: OK
  */
 router.get('/ads', authMiddleware, async (_req, res) => {
-  const ads = await listAds();
-  res.json(ads);
+    const ads = await (0, adsRepo_1.listAds)();
+    res.json(ads);
 });
-
 /**
  * @openapi
  * /ads/serve:
@@ -59,11 +56,11 @@ router.get('/ads', authMiddleware, async (_req, res) => {
  *         description: No Ads
  */
 router.get('/ads/serve', authMiddleware, async (_req, res) => {
-  const ad = await serveAd();
-  if (!ad) return res.status(404).json({ message: 'No ads available' });
-  res.json(ad);
+    const ad = await (0, adsRepo_1.serveAd)();
+    if (!ad)
+        return res.status(404).json({ message: 'No ads available' });
+    res.json(ad);
 });
-
 /**
  * @openapi
  * /ads/{id}:
@@ -81,11 +78,11 @@ router.get('/ads/serve', authMiddleware, async (_req, res) => {
  *         description: Not Found
  */
 router.get('/ads/:id', authMiddleware, async (req, res) => {
-  const ad = await getAd(parseInt(req.params.id));
-  if (!ad) return res.status(404).json({ message: 'Not found' });
-  res.json(ad);
+    const ad = await (0, adsRepo_1.getAd)(parseInt(req.params.id));
+    if (!ad)
+        return res.status(404).json({ message: 'Not found' });
+    res.json(ad);
 });
-
 /**
  * @openapi
  * /ads/{id}:
@@ -96,10 +93,9 @@ router.get('/ads/:id', authMiddleware, async (req, res) => {
  *         description: Deleted
  */
 router.delete('/ads/:id', authMiddleware, checkRole(['admin', 'subadmin']), async (req, res) => {
-  await deleteAd(parseInt(req.params.id));
-  res.status(204).send();
+    await (0, adsRepo_1.deleteAd)(parseInt(req.params.id));
+    res.status(204).send();
 });
-
 /**
  * @openapi
  * /ads/{id}:
@@ -110,13 +106,14 @@ router.delete('/ads/:id', authMiddleware, checkRole(['admin', 'subadmin']), asyn
  *         description: Updated
  */
 router.put('/ads/:id', authMiddleware, checkRole(['vendor']), async (req, res) => {
-  const { title, content } = req.body;
-  if (!title || !content) return res.status(400).json({ message: 'Missing fields' });
-  const ad = await updateAd(parseInt(req.params.id), title, content);
-  if (!ad) return res.status(404).json({ message: 'Not found' });
-  res.json(ad);
+    const { title, content } = req.body;
+    if (!title || !content)
+        return res.status(400).json({ message: 'Missing fields' });
+    const ad = await (0, adsRepo_1.updateAd)(parseInt(req.params.id), title, content);
+    if (!ad)
+        return res.status(404).json({ message: 'Not found' });
+    res.json(ad);
 });
-
 /**
  * @openapi
  * /ads/vendor/{vendorId}:
@@ -132,9 +129,8 @@ router.put('/ads/:id', authMiddleware, checkRole(['vendor']), async (req, res) =
  *         description: OK
  */
 router.get('/ads/vendor/:vendorId', authMiddleware, (_req, res) => {
-  res.json([]);
+    res.json([]);
 });
-
 /**
  * @openapi
  * /ads/bulk:
@@ -145,9 +141,8 @@ router.get('/ads/vendor/:vendorId', authMiddleware, (_req, res) => {
  *         description: Created
  */
 router.post('/ads/bulk', authMiddleware, checkRole(['vendor']), (_req, res) => {
-  res.status(201).json({ message: 'Bulk created' });
+    res.status(201).json({ message: 'Bulk created' });
 });
-
 /**
  * @openapi
  * /ads/search:
@@ -158,9 +153,8 @@ router.post('/ads/bulk', authMiddleware, checkRole(['vendor']), (_req, res) => {
  *         description: OK
  */
 router.get('/ads/search', authMiddleware, (_req, res) => {
-  res.json([]);
+    res.json([]);
 });
-
 /**
  * @openapi
  * /ads/top:
@@ -171,9 +165,8 @@ router.get('/ads/search', authMiddleware, (_req, res) => {
  *         description: OK
  */
 router.get('/ads/top', authMiddleware, (_req, res) => {
-  res.json([]);
+    res.json([]);
 });
-
 /**
  * @openapi
  * /ads/{id}/activate:
@@ -184,9 +177,8 @@ router.get('/ads/top', authMiddleware, (_req, res) => {
  *         description: Activated
  */
 router.post('/ads/:id/activate', authMiddleware, checkRole(['admin', 'subadmin']), (_req, res) => {
-  res.json({ message: 'Activated' });
+    res.json({ message: 'Activated' });
 });
-
 /**
  * @openapi
  * /ads/{id}/deactivate:
@@ -197,9 +189,8 @@ router.post('/ads/:id/activate', authMiddleware, checkRole(['admin', 'subadmin']
  *         description: Deactivated
  */
 router.post('/ads/:id/deactivate', authMiddleware, checkRole(['admin', 'subadmin']), (_req, res) => {
-  res.json({ message: 'Deactivated' });
+    res.json({ message: 'Deactivated' });
 });
-
 /**
  * @openapi
  * /ads/{id}/stats:
@@ -210,9 +201,8 @@ router.post('/ads/:id/deactivate', authMiddleware, checkRole(['admin', 'subadmin
  *         description: OK
  */
 router.get('/ads/:id/stats', authMiddleware, (_req, res) => {
-  res.json({ views: 0 });
+    res.json({ views: 0 });
 });
-
 /**
  * @openapi
  * /ads/{id}/comments:
@@ -223,9 +213,8 @@ router.get('/ads/:id/stats', authMiddleware, (_req, res) => {
  *         description: Created
  */
 router.post('/ads/:id/comments', authMiddleware, (_req, res) => {
-  res.status(201).json({ message: 'Comment added' });
+    res.status(201).json({ message: 'Comment added' });
 });
-
 /**
  * @openapi
  * /ads/{id}/comments:
@@ -236,9 +225,8 @@ router.post('/ads/:id/comments', authMiddleware, (_req, res) => {
  *         description: OK
  */
 router.get('/ads/:id/comments', authMiddleware, (_req, res) => {
-  res.json([]);
+    res.json([]);
 });
-
 /**
  * @openapi
  * /ads/{id}/comments/{commentId}:
@@ -249,9 +237,8 @@ router.get('/ads/:id/comments', authMiddleware, (_req, res) => {
  *         description: Updated
  */
 router.put('/ads/:id/comments/:commentId', authMiddleware, (_req, res) => {
-  res.json({ message: 'Comment updated' });
+    res.json({ message: 'Comment updated' });
 });
-
 /**
  * @openapi
  * /ads/{id}/comments/{commentId}:
@@ -262,9 +249,8 @@ router.put('/ads/:id/comments/:commentId', authMiddleware, (_req, res) => {
  *         description: Deleted
  */
 router.delete('/ads/:id/comments/:commentId', authMiddleware, (_req, res) => {
-  res.status(204).send();
+    res.status(204).send();
 });
-
 /**
  * @openapi
  * /ads/{id}/like:
@@ -275,9 +261,8 @@ router.delete('/ads/:id/comments/:commentId', authMiddleware, (_req, res) => {
  *         description: Liked
  */
 router.post('/ads/:id/like', authMiddleware, (_req, res) => {
-  res.json({ message: 'Liked' });
+    res.json({ message: 'Liked' });
 });
-
 /**
  * @openapi
  * /ads/{id}/like:
@@ -288,9 +273,8 @@ router.post('/ads/:id/like', authMiddleware, (_req, res) => {
  *         description: Removed
  */
 router.delete('/ads/:id/like', authMiddleware, (_req, res) => {
-  res.status(204).send();
+    res.status(204).send();
 });
-
 /**
  * @openapi
  * /ads/{id}/likes:
@@ -301,9 +285,8 @@ router.delete('/ads/:id/like', authMiddleware, (_req, res) => {
  *         description: OK
  */
 router.get('/ads/:id/likes', authMiddleware, (_req, res) => {
-  res.json([]);
+    res.json([]);
 });
-
 /**
  * @openapi
  * /ads/categories:
@@ -314,9 +297,8 @@ router.get('/ads/:id/likes', authMiddleware, (_req, res) => {
  *         description: OK
  */
 router.get('/ads/categories', authMiddleware, (_req, res) => {
-  res.json([]);
+    res.json([]);
 });
-
 /**
  * @openapi
  * /ads/categories:
@@ -327,9 +309,8 @@ router.get('/ads/categories', authMiddleware, (_req, res) => {
  *         description: Created
  */
 router.post('/ads/categories', authMiddleware, checkRole(['admin']), (_req, res) => {
-  res.status(201).json({ message: 'Category created' });
+    res.status(201).json({ message: 'Category created' });
 });
-
 /**
  * @openapi
  * /ads/categories/{id}:
@@ -340,9 +321,8 @@ router.post('/ads/categories', authMiddleware, checkRole(['admin']), (_req, res)
  *         description: Updated
  */
 router.put('/ads/categories/:id', authMiddleware, checkRole(['admin']), (_req, res) => {
-  res.json({ message: 'Category updated' });
+    res.json({ message: 'Category updated' });
 });
-
 /**
  * @openapi
  * /ads/categories/{id}:
@@ -353,9 +333,8 @@ router.put('/ads/categories/:id', authMiddleware, checkRole(['admin']), (_req, r
  *         description: Deleted
  */
 router.delete('/ads/categories/:id', authMiddleware, checkRole(['admin']), (_req, res) => {
-  res.status(204).send();
+    res.status(204).send();
 });
-
 /**
  * @openapi
  * /ads/{id}/share:
@@ -366,9 +345,8 @@ router.delete('/ads/categories/:id', authMiddleware, checkRole(['admin']), (_req
  *         description: OK
  */
 router.get('/ads/:id/share', authMiddleware, (_req, res) => {
-  res.json({ message: 'Share link' });
+    res.json({ message: 'Share link' });
 });
-
 /**
  * @openapi
  * /ads/analytics/overview:
@@ -379,9 +357,8 @@ router.get('/ads/:id/share', authMiddleware, (_req, res) => {
  *         description: OK
  */
 router.get('/ads/analytics/overview', authMiddleware, checkRole(['admin', 'subadmin']), (_req, res) => {
-  res.json({ views: 0 });
+    res.json({ views: 0 });
 });
-
 /**
  * @openapi
  * /ads/analytics/vendor/{vendorId}:
@@ -397,9 +374,8 @@ router.get('/ads/analytics/overview', authMiddleware, checkRole(['admin', 'subad
  *         description: OK
  */
 router.get('/ads/analytics/vendor/:vendorId', authMiddleware, checkRole(['vendor']), (_req, res) => {
-  res.json({ views: 0 });
+    res.json({ views: 0 });
 });
-
 /**
  * @openapi
  * /ads/{id}/report:
@@ -410,9 +386,8 @@ router.get('/ads/analytics/vendor/:vendorId', authMiddleware, checkRole(['vendor
  *         description: Reported
  */
 router.post('/ads/:id/report', authMiddleware, (_req, res) => {
-  res.status(201).json({ message: 'Reported' });
+    res.status(201).json({ message: 'Reported' });
 });
-
 /**
  * @openapi
  * /ads/{id}/pin:
@@ -423,9 +398,8 @@ router.post('/ads/:id/report', authMiddleware, (_req, res) => {
  *         description: Pinned
  */
 router.post('/ads/:id/pin', authMiddleware, checkRole(['admin']), (_req, res) => {
-  res.json({ message: 'Pinned' });
+    res.json({ message: 'Pinned' });
 });
-
 /**
  * @openapi
  * /ads/{id}/pin:
@@ -436,9 +410,8 @@ router.post('/ads/:id/pin', authMiddleware, checkRole(['admin']), (_req, res) =>
  *         description: Unpinned
  */
 router.delete('/ads/:id/pin', authMiddleware, checkRole(['admin']), (_req, res) => {
-  res.status(204).send();
+    res.status(204).send();
 });
-
 /**
  * @openapi
  * /ads/{id}/history:
@@ -449,8 +422,6 @@ router.delete('/ads/:id/pin', authMiddleware, checkRole(['admin']), (_req, res) 
  *         description: OK
  */
 router.get('/ads/:id/history', authMiddleware, (_req, res) => {
-  res.json([]);
+    res.json([]);
 });
-
-
-export default router;
+exports.default = router;
