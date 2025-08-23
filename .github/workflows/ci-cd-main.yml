@@ -1,0 +1,284 @@
+name: CI/CD Pipeline - Main Services
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'giga_main/**'
+      - 'giga_taxi_main/**'
+      - 'giga_taxi_driver/**'
+      - 'ecommerce-backend/**'
+      - 'advertisement-service/**'
+      - 'hotel-service/**'
+      - 'payment-service/**'
+      - 'common/**'
+      - 'packages/common/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'giga_main/**'
+      - 'giga_taxi_main/**'
+      - 'giga_taxi_driver/**'
+      - 'ecommerce-backend/**'
+      - 'advertisement-service/**'
+      - 'hotel-service/**'
+      - 'payment-service/**'
+      - 'common/**'
+      - 'packages/common/**'
+
+env:
+  REGISTRY: ghcr.io
+  NODE_VERSION: '18'
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      giga_main: ${{ steps.changes.outputs.giga_main }}
+      giga_taxi_main: ${{ steps.changes.outputs.giga_taxi_main }}
+      giga_taxi_driver: ${{ steps.changes.outputs.giga_taxi_driver }}
+      ecommerce_backend: ${{ steps.changes.outputs.ecommerce_backend }}
+      advertisement_service: ${{ steps.changes.outputs.advertisement_service }}
+      hotel_service: ${{ steps.changes.outputs.hotel_service }}
+      payment_service: ${{ steps.changes.outputs.payment_service }}
+      common: ${{ steps.changes.outputs.common }}
+      packages_common: ${{ steps.changes.outputs.packages_common }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v2
+        id: changes
+        with:
+          filters: |
+            giga_main:
+              - 'giga_main/**'
+            giga_taxi_main:
+              - 'giga_taxi_main/**'
+            giga_taxi_driver:
+              - 'giga_taxi_driver/**'
+            ecommerce_backend:
+              - 'ecommerce-backend/**'
+            advertisement_service:
+              - 'advertisement-service/**'
+            hotel_service:
+              - 'hotel-service/**'
+            payment_service:
+              - 'payment-service/**'
+            common:
+              - 'common/**'
+            packages_common:
+              - 'packages/common/**'
+
+  lint-and-test:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [
+          { name: 'giga_main', path: 'giga_main', changed: '${{ needs.detect-changes.outputs.giga_main }}' },
+          { name: 'giga_taxi_main', path: 'giga_taxi_main', changed: '${{ needs.detect-changes.outputs.giga_taxi_main }}' },
+          { name: 'giga_taxi_driver', path: 'giga_taxi_driver', changed: '${{ needs.detect-changes.outputs.giga_taxi_driver }}' },
+          { name: 'ecommerce_backend', path: 'ecommerce-backend', changed: '${{ needs.detect-changes.outputs.ecommerce_backend }}' },
+          { name: 'advertisement_service', path: 'advertisement-service', changed: '${{ needs.detect-changes.outputs.advertisement_service }}' },
+          { name: 'hotel_service', path: 'hotel-service', changed: '${{ needs.detect-changes.outputs.hotel_service }}' },
+          { name: 'payment_service', path: 'payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' },
+          { name: 'common', path: 'common', changed: '${{ needs.detect-changes.outputs.common }}' },
+          { name: 'packages_common', path: 'packages/common', changed: '${{ needs.detect-changes.outputs.packages_common }}' }
+        ]
+    if: matrix.service.changed == 'true'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: '${{ matrix.service.path }}/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.service.path }}
+        run: npm ci
+
+      - name: Run linting
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "package.json" ] && npm run --silent lint --if-present; then
+            npm run lint
+          else
+            echo "No lint script found, skipping..."
+          fi
+
+      - name: Run type checking
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "tsconfig.json" ]; then
+            npx tsc --noEmit
+          else
+            echo "No TypeScript config found, skipping type check..."
+          fi
+
+      - name: Run tests
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "package.json" ] && npm run --silent test --if-present; then
+            npm run test -- --coverage --watchAll=false
+          else
+            echo "No test script found, skipping tests..."
+          fi
+        env:
+          NODE_ENV: test
+
+      - name: Upload coverage reports
+        if: success()
+        uses: codecov/codecov-action@v3
+        with:
+          file: ${{ matrix.service.path }}/coverage/lcov.info
+          flags: ${{ matrix.service.name }}
+          name: ${{ matrix.service.name }}-coverage
+
+  security-scan:
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [
+          { name: 'giga_main', path: 'giga_main', changed: '${{ needs.detect-changes.outputs.giga_main }}' },
+          { name: 'giga_taxi_main', path: 'giga_taxi_main', changed: '${{ needs.detect-changes.outputs.giga_taxi_main }}' },
+          { name: 'giga_taxi_driver', path: 'giga_taxi_driver', changed: '${{ needs.detect-changes.outputs.giga_taxi_driver }}' },
+          { name: 'ecommerce_backend', path: 'ecommerce-backend', changed: '${{ needs.detect-changes.outputs.ecommerce_backend }}' },
+          { name: 'advertisement_service', path: 'advertisement-service', changed: '${{ needs.detect-changes.outputs.advertisement_service }}' },
+          { name: 'hotel_service', path: 'hotel-service', changed: '${{ needs.detect-changes.outputs.hotel_service }}' },
+          { name: 'payment_service', path: 'payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' }
+        ]
+    if: matrix.service.changed == 'true'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '${{ matrix.service.path }}'
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.service.name }}.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results-${{ matrix.service.name }}.sarif'
+
+      - name: Run npm audit
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "package.json" ]; then
+            npm audit --audit-level=high
+          fi
+
+  build-and-push:
+    needs: [detect-changes, lint-and-test, security-scan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      matrix:
+        service: [
+          { name: 'giga_main', path: 'giga_main', changed: '${{ needs.detect-changes.outputs.giga_main }}' },
+          { name: 'giga_taxi_main', path: 'giga_taxi_main', changed: '${{ needs.detect-changes.outputs.giga_taxi_main }}' },
+          { name: 'giga_taxi_driver', path: 'giga_taxi_driver', changed: '${{ needs.detect-changes.outputs.giga_taxi_driver }}' },
+          { name: 'ecommerce_backend', path: 'ecommerce-backend', changed: '${{ needs.detect-changes.outputs.ecommerce_backend }}' },
+          { name: 'advertisement_service', path: 'advertisement-service', changed: '${{ needs.detect-changes.outputs.advertisement_service }}' },
+          { name: 'hotel_service', path: 'hotel-service', changed: '${{ needs.detect-changes.outputs.hotel_service }}' },
+          { name: 'payment_service', path: 'payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' }
+        ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        if: matrix.service.changed == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.path }}
+          file: ${{ matrix.service.path }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+
+  deploy-staging:
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    environment: staging
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment..."
+          # This would typically involve kubectl, helm, or other deployment tools
+          # ./scripts/deploy-staging.sh
+
+  deploy-production:
+    needs: [build-and-push]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment..."
+          # This would typically involve kubectl, helm, or other deployment tools
+          # ./scripts/deploy-production.sh
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests..."
+          # ./scripts/smoke-tests.sh
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "Production deployment successful!"
+          # Send notification to Slack, email, etc.
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, initiating rollback..."
+          # ./scripts/rollback.sh

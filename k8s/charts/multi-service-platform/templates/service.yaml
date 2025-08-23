@@ -1,0 +1,23 @@
+{{- range $service := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" }}
+{{- $config := index $.Values $service }}
+{{- if $config.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $service | kebabcase }}-service
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "multi-service-platform.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $service | kebabcase }}
+spec:
+  selector:
+    {{- include "multi-service-platform.selectorLabels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $service | kebabcase }}
+  ports:
+  - port: {{ $config.service.port }}
+    targetPort: {{ $config.service.port }}
+    protocol: TCP
+  type: {{ $config.service.type }}
+{{- end }}
+{{- end }}

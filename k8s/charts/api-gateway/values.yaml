@@ -1,0 +1,112 @@
+# Default values for api-gateway
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-org/your-repo/api-gateway
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources: {}
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Environment variables
+env:
+  NODE_ENV: development
+  LOG_LEVEL: info
+  PORT: 3000
+
+# External dependencies
+postgresql:
+  enabled: false
+  
+redis:
+  enabled: false
+
+# Application configuration
+config:
+  database:
+    host: ""
+    port: 5432
+    name: ""
+    
+  redis:
+    host: ""
+    port: 6379
+    
+  rabbitmq:
+    host: ""
+    port: 5672
+    
+  rateLimit:
+    windowMs: 60000
+    max: 100
+    
+  cors:
+    origin: []
+    credentials: true
+
+# Health checks
+healthCheck:
+  enabled: true
+  path: /health
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Monitoring
+monitoring:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    path: /metrics

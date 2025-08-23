@@ -1,0 +1,253 @@
+version: '3.8'
+
+services:
+  # Databases
+  postgres:
+    image: postgres:15-alpine
+    container_name: giga-postgres
+    environment:
+      POSTGRES_DB: giga_dev
+      POSTGRES_USER: giga_user
+      POSTGRES_PASSWORD: giga_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - giga-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: giga-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - giga-network
+
+  # Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: giga-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: giga_user
+      RABBITMQ_DEFAULT_PASS: giga_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - giga-network
+
+  # Search Engine
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.2
+    container_name: giga-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - giga-network
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: giga-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - giga-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: giga-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - giga-network
+
+  # Services
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: giga-api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+      - PORT=8000
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+  authentication-service:
+    build:
+      context: .
+      dockerfile: services/authentication-service/Dockerfile
+    container_name: giga-auth-service
+    ports:
+      - "8001:8001"
+    environment:
+      - NODE_ENV=development
+      - PORT=8001
+      - DATABASE_URL=postgresql://giga_user:giga_password@postgres:5432/giga_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+    volumes:
+      - ./services/authentication-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    container_name: giga-payment-service
+    ports:
+      - "8002:8002"
+    environment:
+      - NODE_ENV=development
+      - PORT=8002
+      - DATABASE_URL=postgresql://giga_user:giga_password@postgres:5432/giga_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+    volumes:
+      - ./services/payment-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: giga-notification-service
+    ports:
+      - "8003:8003"
+    environment:
+      - NODE_ENV=development
+      - PORT=8003
+      - DATABASE_URL=postgresql://giga_user:giga_password@postgres:5432/giga_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+    volumes:
+      - ./services/notification-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+  search-service:
+    build:
+      context: .
+      dockerfile: services/search-service/Dockerfile
+    container_name: giga-search-service
+    ports:
+      - "8004:8004"
+    environment:
+      - NODE_ENV=development
+      - PORT=8004
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+    volumes:
+      - ./services/search-service:/app
+      - /app/node_modules
+    depends_on:
+      - elasticsearch
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+  file-service:
+    build:
+      context: .
+      dockerfile: services/file-service/Dockerfile
+    container_name: giga-file-service
+    ports:
+      - "8005:8005"
+    environment:
+      - NODE_ENV=development
+      - PORT=8005
+      - DATABASE_URL=postgresql://giga_user:giga_password@postgres:5432/giga_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+    volumes:
+      - ./services/file-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: giga-analytics-service
+    ports:
+      - "8006:8006"
+    environment:
+      - NODE_ENV=development
+      - PORT=8006
+      - DATABASE_URL=postgresql://giga_user:giga_password@postgres:5432/giga_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+    volumes:
+      - ./services/analytics-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  elasticsearch_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  giga-network:
+    driver: bridge

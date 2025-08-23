@@ -1,0 +1,405 @@
+# Production values for multi-service-platform
+global:
+  imageRegistry: "your-registry.com"
+  imagePullSecrets:
+    - name: registry-secret
+  storageClass: "fast-ssd"
+
+app:
+  name: multi-service-platform
+  version: "1.0.0"
+  environment: production
+
+# API Gateway - Higher resources for production
+apiGateway:
+  enabled: true
+  replicaCount: 5
+  image:
+    repository: multi-service-platform/api-gateway
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 60
+    targetMemoryUtilizationPercentage: 70
+
+# Authentication Service - Critical service
+authenticationService:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: multi-service-platform/authentication-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3001
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 15
+    targetCPUUtilizationPercentage: 60
+
+# Ecommerce Service - High traffic expected
+ecommerceService:
+  enabled: true
+  replicaCount: 5
+  image:
+    repository: multi-service-platform/ecommerce-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3002
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "1000m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 25
+    targetCPUUtilizationPercentage: 60
+
+# Payment Service - Critical and secure
+paymentService:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: multi-service-platform/payment-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3003
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 50
+
+# Taxi Service - Real-time requirements
+taxiService:
+  enabled: true
+  replicaCount: 4
+  image:
+    repository: multi-service-platform/taxi-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3004
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "1000m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 60
+
+# Hotel Service
+hotelService:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: multi-service-platform/hotel-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3005
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 15
+    targetCPUUtilizationPercentage: 60
+
+# Advertisement Service
+advertisementService:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: multi-service-platform/advertisement-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3006
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 60
+
+# Notification Service
+notificationService:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: multi-service-platform/notification-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3007
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 60
+
+# File Service - High I/O
+fileService:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: multi-service-platform/file-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3008
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "1000m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 15
+    targetCPUUtilizationPercentage: 60
+
+# Search Service - CPU intensive
+searchService:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: multi-service-platform/search-service
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3009
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "1000m"
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 60
+
+# Ingress configuration for production
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: api.yourplatform.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api-gateway-service
+          port: 3000
+  tls:
+    - secretName: platform-tls
+      hosts:
+        - api.yourplatform.com
+
+# Production database configurations
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "CHANGE_ME_IN_PRODUCTION"
+    username: "platform_user"
+    password: "CHANGE_ME_IN_PRODUCTION"
+    database: "platform_db"
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+  readReplicas:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+    resources:
+      requests:
+        memory: "2Gi"
+        cpu: "1000m"
+      limits:
+        memory: "4Gi"
+        cpu: "2000m"
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "CHANGE_ME_IN_PRODUCTION"
+  master:
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: "fast-ssd"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+  replica:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: "fast-ssd"
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+
+rabbitmq:
+  enabled: true
+  auth:
+    username: "platform_user"
+    password: "CHANGE_ME_IN_PRODUCTION"
+  persistence:
+    enabled: true
+    size: 50Gi
+    storageClass: "fast-ssd"
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  clustering:
+    enabled: true
+    replicaCount: 3
+
+elasticsearch:
+  enabled: true
+  master:
+    replicaCount: 3
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: "fast-ssd"
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2000m"
+      limits:
+        memory: "8Gi"
+        cpu: "4000m"
+  data:
+    replicaCount: 3
+    persistence:
+      enabled: true
+      size: 200Gi
+      storageClass: "fast-ssd"
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "2000m"
+      limits:
+        memory: "8Gi"
+        cpu: "4000m"
+
+# Service Monitor for Prometheus
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  labels:
+    app: multi-service-platform
+    environment: production
+
+# Network Policies for production security
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+  egress:
+    enabled: true

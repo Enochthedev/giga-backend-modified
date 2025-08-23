@@ -1,0 +1,127 @@
+# Production values for API Gateway
+replicaCount: 3
+
+image:
+  repository: ghcr.io/your-org/your-repo/api-gateway
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 2000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: api.yourdomain.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: api-gateway-tls
+      hosts:
+        - api.yourdomain.com
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - api-gateway
+        topologyKey: kubernetes.io/hostname
+
+# Environment-specific configuration
+env:
+  NODE_ENV: production
+  LOG_LEVEL: info
+  PORT: 3000
+  
+# Database configuration
+database:
+  host: postgresql
+  port: 5432
+  name: api_gateway_prod
+  
+# Redis configuration
+redis:
+  host: redis-master
+  port: 6379
+  
+# RabbitMQ configuration
+rabbitmq:
+  host: rabbitmq
+  port: 5672
+  
+# Rate limiting
+rateLimit:
+  windowMs: 60000
+  max: 100
+  
+# CORS configuration
+cors:
+  origin: ["https://yourdomain.com", "https://app.yourdomain.com"]
+  credentials: true
+
+# Health check configuration
+healthCheck:
+  enabled: true
+  path: /health
+  
+# Monitoring
+monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    path: /metrics

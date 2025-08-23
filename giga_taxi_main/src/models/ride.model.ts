@@ -17,7 +17,7 @@ interface IRide extends Document {
   finalFee: number
   // Other ride-related properties specific to the driver
 }
- 
+
 // Create the schema for the DriverRide model
 const RideSchema = new Schema<IRide>({
   driverId: { type: Schema.Types.ObjectId, ref: 'Driver', required: true },

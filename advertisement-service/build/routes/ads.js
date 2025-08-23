@@ -425,3 +425,4 @@ router.get('/ads/:id/history', authMiddleware, (_req, res) => {
     res.json([]);
 });
 exports.default = router;
+//# sourceMappingURL=ads.js.map

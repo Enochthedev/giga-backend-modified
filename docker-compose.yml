@@ -30,13 +30,21 @@ services:
       - backend-network
 
   redis:
-    image: redis
+    image: redis:7-alpine
     container_name: redis
     restart: always
     ports:
       - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
     networks:
       - backend-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   giga-main:
     build:
@@ -88,7 +96,7 @@ services:
       dockerfile: giga_taxi_driver/Dockerfile
     container_name: giga-taxi-driver
     ports:
-      - "6000:6000"
+      - "3004:6000"
     depends_on:
       - postgres
       - rabbitmq
@@ -198,6 +206,9 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     networks:
       - backend-network
+
+volumes:
+  redis-data:
 
 networks:
   backend-network:

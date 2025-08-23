@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "multi-service-platform.labels" . | nindent 4 }}
+data:
+  NODE_ENV: {{ .Values.app.environment | quote }}
+  LOG_LEVEL: {{ if eq .Values.app.environment "production" }}"info"{{ else }}"debug"{{ end }}
+  REDIS_HOST: {{ if .Values.redis.enabled }}"{{ .Release.Name }}-redis-master"{{ else }}"redis-service"{{ end }}
+  REDIS_PORT: "6379"
+  RABBITMQ_HOST: {{ if .Values.rabbitmq.enabled }}"{{ .Release.Name }}-rabbitmq"{{ else }}"rabbitmq-service"{{ end }}
+  RABBITMQ_PORT: "5672"
+  POSTGRES_HOST: {{ if .Values.postgresql.enabled }}"{{ .Release.Name }}-postgresql"{{ else }}"postgres-service"{{ end }}
+  POSTGRES_PORT: "5432"
+  ELASTICSEARCH_HOST: {{ if .Values.elasticsearch.enabled }}"{{ .Release.Name }}-elasticsearch"{{ else }}"elasticsearch-service"{{ end }}
+  ELASTICSEARCH_PORT: "9200"
+  API_GATEWAY_URL: "http://api-gateway-service:{{ .Values.apiGateway.service.port }}"

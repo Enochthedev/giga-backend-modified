@@ -1,0 +1,329 @@
+# Staging values for multi-service-platform
+global:
+  imageRegistry: "your-registry.com"
+  imagePullSecrets:
+    - name: registry-secret
+  storageClass: "standard"
+
+app:
+  name: multi-service-platform
+  version: "1.0.0-staging"
+  environment: staging
+
+# Reduced resources for staging environment
+apiGateway:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: multi-service-platform/api-gateway
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+authenticationService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/authentication-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3001
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+
+ecommerceService:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: multi-service-platform/ecommerce-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3002
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+paymentService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/payment-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3003
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+
+taxiService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/taxi-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3004
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+
+hotelService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/hotel-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3005
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+
+advertisementService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/advertisement-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3006
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: false
+
+notificationService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/notification-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3007
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: false
+
+fileService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/file-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3008
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: false
+
+searchService:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/search-service
+    tag: "staging"
+    pullPolicy: Always
+  service:
+    type: ClusterIP
+    port: 3009
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: false
+
+# Ingress configuration for staging
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
+  hosts:
+    - host: staging-api.yourplatform.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api-gateway-service
+          port: 3000
+  tls:
+    - secretName: platform-staging-tls
+      hosts:
+        - staging-api.yourplatform.com
+
+# Smaller database configurations for staging
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "staging_password"
+    username: "platform_user"
+    password: "staging_password"
+    database: "platform_staging_db"
+  primary:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "staging_redis_password"
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+rabbitmq:
+  enabled: true
+  auth:
+    username: "platform_user"
+    password: "staging_rabbitmq_password"
+  persistence:
+    enabled: true
+    size: 10Gi
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+elasticsearch:
+  enabled: true
+  master:
+    persistence:
+      enabled: true
+      size: 20Gi
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+
+# Service Monitor for staging
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  labels:
+    app: multi-service-platform
+    environment: staging
+
+# Network Policies disabled for easier debugging in staging
+networkPolicy:
+  enabled: false

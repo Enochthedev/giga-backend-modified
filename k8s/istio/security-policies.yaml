@@ -1,0 +1,90 @@
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: multi-service-platform
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-authenticated-users
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: authentication-service
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/multi-service-platform/sa/default"]
+  - to:
+    - operation:
+        methods: ["GET", "POST"]
+        paths: ["/auth/*", "/health", "/ready"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-payment-service
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: payment-service
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/multi-service-platform/sa/default"]
+  - to:
+    - operation:
+        methods: ["POST", "GET"]
+        paths: ["/payment/*", "/health", "/ready"]
+  - when:
+    - key: request.headers[authorization]
+      values: ["Bearer *"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ecommerce-service
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: ecommerce-service
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/multi-service-platform/sa/default"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/ecommerce/*", "/health", "/ready"]
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all-default
+  namespace: multi-service-platform
+spec:
+  {}
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ingress-gateway
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]

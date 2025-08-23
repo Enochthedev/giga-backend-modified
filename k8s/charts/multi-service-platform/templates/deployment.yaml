@@ -1,0 +1,60 @@
+{{- range $service := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" }}
+{{- $config := index $.Values $service }}
+{{- if $config.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $service | kebabcase }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "multi-service-platform.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $service | kebabcase }}
+spec:
+  replicas: {{ $config.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "multi-service-platform.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $service | kebabcase }}
+  template:
+    metadata:
+      labels:
+        {{- include "multi-service-platform.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $service | kebabcase }}
+    spec:
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: {{ $service | kebabcase }}
+        image: "{{ $config.image.repository }}:{{ $config.image.tag }}"
+        imagePullPolicy: {{ $config.image.pullPolicy }}
+        ports:
+        - containerPort: {{ $config.service.port }}
+        env:
+        - name: PORT
+          value: "{{ $config.service.port }}"
+        - name: NODE_ENV
+          value: {{ $.Values.app.environment }}
+        envFrom:
+        - configMapRef:
+            name: platform-config
+        - secretRef:
+            name: platform-secrets
+        resources:
+          {{- toYaml $config.resources | nindent 10 }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ $config.service.port }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: {{ $config.service.port }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+{{- end }}
+{{- end }}

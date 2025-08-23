@@ -5,19 +5,42 @@
   "scripts": {
     "start": "node build/app.js",
     "build": "tsc",
-    "test": "npm run build",
-    "lint": "echo lint ok"
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
   },
   "dependencies": {
+    "@giga/common": "file:../packages/common",
     "express": "^4.18.2",
     "pg": "^8.11.1",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^4.6.3"
+    "swagger-ui-express": "^4.6.3",
+    "stripe": "^13.10.0",
+    "zod": "^3.22.2",
+    "uuid": "^9.0.0",
+    "winston": "^3.10.0",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.0.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.17",
     "@types/node": "^18.17.0",
     "@types/pg": "^8.15.4",
-    "typescript": "^5.1.6"
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
+    "@types/uuid": "^9.0.2",
+    "@types/cors": "^2.8.13",
+    "@types/supertest": "^2.0.12",
+    "supertest": "^6.3.3",
+    "typescript": "^5.1.6",
+    "jest": "^29.6.2",
+    "@types/jest": "^29.5.3",
+    "ts-jest": "^29.1.1",
+    "eslint": "^8.45.0",
+    "@typescript-eslint/eslint-plugin": "^6.2.1",
+    "@typescript-eslint/parser": "^6.2.1"
   }
 }

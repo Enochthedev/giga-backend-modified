@@ -1,0 +1,189 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: platform-gateway
+  namespace: multi-service-platform
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - api.yourplatform.com
+    - "*.yourplatform.com"
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: platform-tls-secret
+    hosts:
+    - api.yourplatform.com
+    - "*.yourplatform.com"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: platform-virtualservice
+  namespace: multi-service-platform
+spec:
+  hosts:
+  - api.yourplatform.com
+  gateways:
+  - platform-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /auth/
+    route:
+    - destination:
+        host: authentication-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3001
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - match:
+    - uri:
+        prefix: /ecommerce/
+    route:
+    - destination:
+        host: ecommerce-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3002
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - match:
+    - uri:
+        prefix: /payment/
+    route:
+    - destination:
+        host: payment-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3003
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - match:
+    - uri:
+        prefix: /taxi/
+    route:
+    - destination:
+        host: taxi-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3004
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - match:
+    - uri:
+        prefix: /hotel/
+    route:
+    - destination:
+        host: hotel-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3005
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - match:
+    - uri:
+        prefix: /ads/
+    route:
+    - destination:
+        host: advertisement-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3006
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - match:
+    - uri:
+        prefix: /notifications/
+    route:
+    - destination:
+        host: notification-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3007
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - match:
+    - uri:
+        prefix: /files/
+    route:
+    - destination:
+        host: file-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3008
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - match:
+    - uri:
+        prefix: /search/
+    route:
+    - destination:
+        host: search-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3009
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 2s
+  - route:
+    - destination:
+        host: api-gateway-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3000

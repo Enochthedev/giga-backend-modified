@@ -1,0 +1,209 @@
+{
+    "dashboard": {
+        "id": null,
+        "title": "Business Metrics Dashboard",
+        "tags": [
+            "business",
+            "metrics"
+        ],
+        "timezone": "browser",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Payment Transactions",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(increase(payment_transactions_total[1h]))",
+                        "legendFormat": "Total Transactions (1h)"
+                    }
+                ],
+                "gridPos": {
+                    "h": 6,
+                    "w": 6,
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": 2,
+                "title": "Payment Success Rate",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(rate(payment_transactions_total{status=\"success\"}[5m])) / sum(rate(payment_transactions_total[5m])) * 100",
+                        "legendFormat": "Success Rate %"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "percent",
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "red",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 90
+                                },
+                                {
+                                    "color": "green",
+                                    "value": 95
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 6,
+                    "w": 6,
+                    "x": 6,
+                    "y": 0
+                }
+            },
+            {
+                "id": 3,
+                "title": "User Registrations",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(increase(user_registrations_total[1h]))",
+                        "legendFormat": "New Users (1h)"
+                    }
+                ],
+                "gridPos": {
+                    "h": 6,
+                    "w": 6,
+                    "x": 12,
+                    "y": 0
+                }
+            },
+            {
+                "id": 4,
+                "title": "Active Sessions",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(active_sessions)",
+                        "legendFormat": "Active Sessions"
+                    }
+                ],
+                "gridPos": {
+                    "h": 6,
+                    "w": 6,
+                    "x": 18,
+                    "y": 0
+                }
+            },
+            {
+                "id": 5,
+                "title": "Order Processing Rate",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(orders_total[5m])) by (status)",
+                        "legendFormat": "{{status}}"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 6
+                }
+            },
+            {
+                "id": 6,
+                "title": "Ride Bookings",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(ride_bookings_total[5m])) by (status)",
+                        "legendFormat": "{{status}}"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 6
+                }
+            },
+            {
+                "id": 7,
+                "title": "Hotel Bookings",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(hotel_bookings_total[5m])) by (status)",
+                        "legendFormat": "{{status}}"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 14
+                }
+            },
+            {
+                "id": 8,
+                "title": "File Uploads",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(file_uploads_total[5m])) by (status)",
+                        "legendFormat": "{{status}}"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 14
+                }
+            },
+            {
+                "id": 9,
+                "title": "Search Queries",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(search_queries_total[5m]))",
+                        "legendFormat": "Queries/sec"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 22
+                }
+            },
+            {
+                "id": 10,
+                "title": "Notification Delivery Rate",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(notifications_sent_total[5m])) by (channel, status)",
+                        "legendFormat": "{{channel}} - {{status}}"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 22
+                }
+            }
+        ],
+        "time": {
+            "from": "now-6h",
+            "to": "now"
+        },
+        "refresh": "30s"
+    }
+}

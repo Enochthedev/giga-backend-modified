@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-service
+  namespace: multi-service-platform
+  labels:
+    app: ecommerce-service
+    version: v1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ecommerce-service
+  template:
+    metadata:
+      labels:
+        app: ecommerce-service
+        version: v1
+    spec:
+      containers:
+      - name: ecommerce-service
+        image: multi-service-platform/ecommerce-service:latest
+        ports:
+        - containerPort: 3002
+        env:
+        - name: PORT
+          value: "3002"
+        - name: DATABASE_URL
+          value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@$(POSTGRES_HOST):$(POSTGRES_PORT)/ecommerce_db"
+        envFrom:
+        - configMapRef:
+            name: platform-config
+        - secretRef:
+            name: platform-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3002
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ecommerce-service
+  namespace: multi-service-platform
+  labels:
+    app: ecommerce-service
+spec:
+  selector:
+    app: ecommerce-service
+  ports:
+  - port: 3002
+    targetPort: 3002
+    protocol: TCP
+  type: ClusterIP

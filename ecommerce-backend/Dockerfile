@@ -1,19 +1,14 @@
 FROM node:18
 WORKDIR /app
 
-# Copy and build common module first
-COPY common ./common
-WORKDIR /app/common
-RUN npm install
-RUN npm run build
-
-# Build the main service
-WORKDIR /app
+# Copy package files and install dependencies
 COPY ecommerce-backend/package.json ecommerce-backend/tsconfig.json ./
 RUN npm install
-# Copy the built common module to node_modules
-RUN mkdir -p node_modules/common && cp -r common/build/* node_modules/common/
+
+# Copy source code
 COPY ecommerce-backend/src ./src
+
+# Build the service
 RUN npm run build
 RUN npm prune --production
 

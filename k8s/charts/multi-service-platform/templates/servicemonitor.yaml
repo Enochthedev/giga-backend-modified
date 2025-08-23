@@ -1,0 +1,32 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{- range $service := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" }}
+{{- $config := index $.Values $service }}
+{{- if $config.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $service | kebabcase }}-metrics
+  namespace: {{ $.Values.serviceMonitor.namespace | default $.Release.Namespace }}
+  labels:
+    {{- include "multi-service-platform.labels" $ | nindent 4 }}
+    {{- with $.Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    app.kubernetes.io/component: {{ $service | kebabcase }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "multi-service-platform.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $service | kebabcase }}
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+    - {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- end }}

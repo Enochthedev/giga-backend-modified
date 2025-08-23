@@ -1,14 +1,27 @@
 {
   "compilerOptions": {
-    "outDir": "build",
+    "target": "es2020",
     "module": "commonjs",
-    "target": "es2019",
-    "esModuleInterop": true,
+    "outDir": "./build",
+    "rootDir": "./src",
     "strict": true,
-    "baseUrl": ".",
-    "moduleResolution": "node"
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "baseUrl": "."
   },
-  "include": [
-    "src/**/*"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "build", "**/*.test.ts", "**/*.spec.ts"]
 }

@@ -1,3 +1,10 @@
 {
-  "cSpell.words": ["ecommerce", "giga", "Isub", "otpauth", "rabbitmq"]
+  "cSpell.words": [
+    "ecommerce",
+    "giga",
+    "Isub",
+    "otpauth",
+    "rabbitmq"
+  ],
+  "kiroAgent.configureMCP": "Disabled"
 }
