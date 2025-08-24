@@ -27,6 +27,7 @@ app.use(cors({
 }));
 
 // Initialize OAuth strategies
+import { OAuthService } from './services/oauth-service';
 OAuthService.initialize();
 
 // Passport middleware

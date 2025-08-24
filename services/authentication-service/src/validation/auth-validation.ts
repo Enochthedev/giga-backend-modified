@@ -1,143 +1,165 @@
-import { z } from 'zod';
+import Joi from 'joi';
 
-/**
- * Validation schemas for authentication endpoints
- */
-
-// Email validation
-const emailSchema = z.string()
-    .email('Invalid email format')
-    .min(1, 'Email is required')
-    .max(255, 'Email cannot exceed 255 characters')
-    .transform(email => email.toLowerCase());
-
-// Password validation
-const passwordSchema = z.string()
-    .min(8, 'Password must be at least 8 characters long')
-    .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-        'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'
-    );
-
-// Name validation
-const nameSchema = z.string()
-    .min(2, 'Name must be at least 2 characters long')
-    .max(50, 'Name cannot exceed 50 characters')
-    .regex(/^[a-zA-Z\s'-]+$/, 'Name can only contain letters, spaces, hyphens, and apostrophes');
-
-// Phone validation (optional)
-const phoneSchema = z.string()
-    .regex(/^\+?[1-9]\d{1,14}$/, 'Invalid phone number format')
-    .optional();
-
-// Date validation - keep as string for input, transform in service layer
-const dateSchema = z.string()
-    .refine(date => !isNaN(Date.parse(date)), 'Invalid date format')
-    .optional();
-
-// UUID validation
-const uuidSchema = z.string().uuid('Invalid UUID format');
-
-// Register schema
-export const registerSchema = z.object({
-    email: emailSchema,
-    password: passwordSchema,
-    firstName: nameSchema,
-    lastName: nameSchema,
-    phone: phoneSchema,
-    dateOfBirth: dateSchema
-});
-
-// Login schema
-export const loginSchema = z.object({
-    email: emailSchema,
-    password: z.string().min(1, 'Password is required')
-});
-
-// Refresh token schema
-export const refreshTokenSchema = z.object({
-    refreshToken: z.string().min(1, 'Refresh token is required')
-});
-
-// Logout schema
-export const logoutSchema = z.object({
-    refreshToken: z.string().min(1, 'Refresh token is required')
-});
-
-// Change password schema
-export const changePasswordSchema = z.object({
-    userId: uuidSchema.optional(), // In production, this would come from JWT
-    currentPassword: z.string().min(1, 'Current password is required'),
-    newPassword: passwordSchema,
-    confirmPassword: z.string().min(1, 'Password confirmation is required')
-}).refine(data => data.newPassword === data.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword']
-});
-
-// Verify token schema
-export const verifyTokenSchema = z.object({
-    token: z.string().min(1, 'Token is required')
-});
-
-// Forgot password schema
-export const forgotPasswordSchema = z.object({
-    email: emailSchema
-});
-
-// Reset password schema
-export const resetPasswordSchema = z.object({
-    token: z.string().min(1, 'Reset token is required'),
-    newPassword: passwordSchema,
-    confirmPassword: z.string().min(1, 'Password confirmation is required')
-}).refine(data => data.newPassword === data.confirmPassword, {
-    message: 'Passwords do not match',
-    path: ['confirmPassword']
-});
-
-// Verify email schema
-export const verifyEmailSchema = z.object({
-    token: z.string().min(1, 'Verification token is required')
-});
-
-// Resend verification schema
-export const resendVerificationSchema = z.object({
-    email: emailSchema
-});
-
-// OAuth callback schema
-export const oauthCallbackSchema = z.object({
-    provider: z.enum(['google', 'facebook'], {
-        errorMap: () => ({ message: 'Provider must be either google or facebook' })
+export const authValidation = {
+    register: Joi.object({
+        email: Joi.string().email().required().messages({
+            'string.email': 'Please provide a valid email address',
+            'any.required': 'Email is required'
+        }),
+        password: Joi.string()
+            .min(8)
+            .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+            .required()
+            .messages({
+                'string.min': 'Password must be at least 8 characters long',
+                'string.pattern.base': 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+                'any.required': 'Password is required'
+            }),
+        firstName: Joi.string().min(1).max(100).required().messages({
+            'string.min': 'First name is required',
+            'string.max': 'First name cannot exceed 100 characters',
+            'any.required': 'First name is required'
+        }),
+        lastName: Joi.string().max(100).optional(),
+        otherNames: Joi.string().max(100).optional(),
+        username: Joi.string().min(3).max(50).alphanum().required().messages({
+            'string.min': 'Username must be at least 3 characters long',
+            'string.max': 'Username cannot exceed 50 characters',
+            'string.alphanum': 'Username can only contain letters and numbers',
+            'any.required': 'Username is required'
+        }),
+        phone: Joi.string().pattern(/^\+?[\d\s\-\(\)]+$/).required().messages({
+            'string.pattern.base': 'Please provide a valid phone number',
+            'any.required': 'Phone number is required'
+        }),
+        country: Joi.string().min(1).max(100).required().messages({
+            'any.required': 'Country is required'
+        }),
+        address: Joi.string().min(1).required().messages({
+            'any.required': 'Address is required'
+        }),
+        street: Joi.string().min(1).max(255).required().messages({
+            'any.required': 'Street is required'
+        }),
+        city: Joi.string().min(1).max(100).required().messages({
+            'any.required': 'City is required'
+        }),
+        zipCode: Joi.string().min(1).max(20).required().messages({
+            'any.required': 'Zip code is required'
+        }),
+        gender: Joi.string().valid('male', 'female', 'other', 'prefer-not-to-say').required().messages({
+            'any.only': 'Gender must be one of: male, female, other, prefer-not-to-say',
+            'any.required': 'Gender is required'
+        }),
+        weight: Joi.number().min(20).max(500).optional(),
+        maritalStatus: Joi.string().valid('single', 'married', 'divorced', 'widowed', 'prefer-not-to-say').required().messages({
+            'any.only': 'Marital status must be one of: single, married, divorced, widowed, prefer-not-to-say',
+            'any.required': 'Marital status is required'
+        }),
+        ageGroup: Joi.string().valid('18-24', '25-34', '35-44', '45-54', '55-64', '65+').required().messages({
+            'any.only': 'Age group must be one of: 18-24, 25-34, 35-44, 45-54, 55-64, 65+',
+            'any.required': 'Age group is required'
+        }),
+        areaOfInterest: Joi.string().min(1).required().messages({
+            'any.required': 'Area of interest is required'
+        }),
+        profilePicture: Joi.string().uri().optional()
     }),
-    code: z.string().min(1, 'Authorization code is required'),
-    state: z.string().optional()
-});
 
-// Export all schemas
-export const authValidationSchemas = {
-    register: registerSchema,
-    login: loginSchema,
-    refreshToken: refreshTokenSchema,
-    logout: logoutSchema,
-    changePassword: changePasswordSchema,
-    verifyToken: verifyTokenSchema,
-    forgotPassword: forgotPasswordSchema,
-    resetPassword: resetPasswordSchema,
-    verifyEmail: verifyEmailSchema,
-    resendVerification: resendVerificationSchema,
-    oauthCallback: oauthCallbackSchema
+    login: Joi.object({
+        email: Joi.string().email().required().messages({
+            'string.email': 'Please provide a valid email address',
+            'any.required': 'Email is required'
+        }),
+        password: Joi.string().required().messages({
+            'any.required': 'Password is required'
+        }),
+        deviceId: Joi.string().optional()
+    }),
+
+    refreshToken: Joi.object({
+        refreshToken: Joi.string().required().messages({
+            'any.required': 'Refresh token is required'
+        })
+    }),
+
+    logout: Joi.object({
+        refreshToken: Joi.string().required().messages({
+            'any.required': 'Refresh token is required'
+        })
+    }),
+
+    changePassword: Joi.object({
+        currentPassword: Joi.string().required().messages({
+            'any.required': 'Current password is required'
+        }),
+        newPassword: Joi.string()
+            .min(8)
+            .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+            .required()
+            .messages({
+                'string.min': 'New password must be at least 8 characters long',
+                'string.pattern.base': 'New password must contain at least one uppercase letter, one lowercase letter, one number, and one special character',
+                'any.required': 'New password is required'
+            })
+    }),
+
+    verifyOTP: Joi.object({
+        otp: Joi.string().length(6).pattern(/^\d+$/).required().messages({
+            'string.length': 'OTP must be 6 digits',
+            'string.pattern.base': 'OTP must contain only numbers',
+            'any.required': 'OTP is required'
+        })
+    }),
+
+    verifyEmail: Joi.object({
+        email: Joi.string().email().required().messages({
+            'string.email': 'Please provide a valid email address',
+            'any.required': 'Email is required'
+        }),
+        token: Joi.string().required().messages({
+            'any.required': 'Verification token is required'
+        })
+    }),
+
+    verifyToken: Joi.object({
+        token: Joi.string().required().messages({
+            'any.required': 'Token is required'
+        })
+    }),
+
+    updateProfile: Joi.object({
+        firstName: Joi.string().min(1).max(100).optional(),
+        lastName: Joi.string().max(100).optional(),
+        otherNames: Joi.string().max(100).optional(),
+        country: Joi.string().min(1).max(100).optional(),
+        address: Joi.string().min(1).optional(),
+        street: Joi.string().min(1).max(255).optional(),
+        city: Joi.string().min(1).max(100).optional(),
+        zipCode: Joi.string().min(1).max(20).optional(),
+        gender: Joi.string().valid('male', 'female', 'other', 'prefer-not-to-say').optional(),
+        weight: Joi.number().min(20).max(500).optional(),
+        maritalStatus: Joi.string().valid('single', 'married', 'divorced', 'widowed', 'prefer-not-to-say').optional(),
+        ageGroup: Joi.string().valid('18-24', '25-34', '35-44', '45-54', '55-64', '65+').optional(),
+        areaOfInterest: Joi.string().min(1).optional(),
+        profilePicture: Joi.string().uri().optional()
+    }),
+
+    addRating: Joi.object({
+        rating: Joi.number().min(1).max(5).required().messages({
+            'number.min': 'Rating must be at least 1',
+            'number.max': 'Rating cannot exceed 5',
+            'any.required': 'Rating is required'
+        })
+    }),
+
+    createTaxiAccount: Joi.object({
+        taxiProfileId: Joi.string().required().messages({
+            'any.required': 'Taxi profile ID is required'
+        }),
+        type: Joi.string().valid('TaxiDriver', 'TaxiCustomer').required().messages({
+            'any.only': 'Type must be either TaxiDriver or TaxiCustomer',
+            'any.required': 'Type is required'
+        })
+    })
 };
-
-// Export type inference helpers
-export type RegisterInput = z.infer<typeof registerSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
-export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
-export type LogoutInput = z.infer<typeof logoutSchema>;
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
-export type VerifyTokenInput = z.infer<typeof verifyTokenSchema>;
-export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
-export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
-export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
-export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
-export type OAuthCallbackInput = z.infer<typeof oauthCallbackSchema>;

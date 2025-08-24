@@ -22,6 +22,7 @@
         "@types/mongoose": "^5.11.97",
         "@types/socket.io": "^3.0.2",
         "amqplib": "^0.10.3",
+        "@types/amqplib": "^0.10.1",
         "bcryptjs": "^2.4.3",
         "jsonwebtoken": "^9.0.2",
         "joi": "^17.9.2",
@@ -51,7 +52,9 @@
         "microservice",
         "typescript",
         "postgresql",
-        "websocket"
+        "websocket",
+        "rabbitmq",
+        "fuel-pricing"
     ],
     "author": "Development Team",
     "license": "MIT"

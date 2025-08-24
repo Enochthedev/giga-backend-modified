@@ -2,157 +2,34 @@ import express from 'express';
 import passport from 'passport';
 import { AuthService } from '../services/auth-service';
 import { OAuthService } from '../services/oauth-service';
-import { MfaService } from '../services/mfa-service';
-import { DeviceManagementService } from '../services/device-management-service';
-import { FraudDetectionService } from '../services/fraud-detection-service';
-import { SecurityAuditService } from '../services/security-audit-service';
-import { ApiError } from '@giga/common';
+import { ApiError, Logger } from '@giga/common';
+import { authValidation } from '../validation/auth-validation';
+import { validateRequest } from '../middleware/validation-middleware';
+import { authMiddleware } from '../middleware/auth-middleware';
 
 const router = express.Router();
 
 /**
- * Enhanced login with fraud detection and device management
+ * User registration
  */
-router.post('/login', async (req, res, next) => {
+router.post('/register', validateRequest(authValidation.register), async (req, res, next) => {
     try {
-        const { email, password, deviceId } = req.body;
-        const ipAddress = req.ip || req.connection.remoteAddress || '';
-        const userAgent = req.get('User-Agent') || '';
+        const result = await AuthService.register(req.body);
 
-        // Parse device information
-        const deviceInfo = DeviceManagementService.parseDeviceInfo(
-            userAgent,
-            ipAddress,
-            deviceId
-        );
-
-        // Get user first to check if account exists
-        const user = await AuthService.findUserByEmail(email);
-        if (!user) {
-            await FraudDetectionService.logLoginAttempt({
-                email,
-                ipAddress,
-                userAgent,
-                success: false,
-                failureReason: 'user_not_found',
-                deviceFingerprint: deviceInfo.deviceId
-            });
-            throw ApiError.unauthorized('Invalid email or password');
-        }
-
-        // Perform fraud analysis
-        const fraudCheck = await FraudDetectionService.analyzeLoginAttempt(
-            user.id,
-            email,
-            ipAddress,
-            userAgent,
-            deviceInfo.deviceId
-        );
-
-        // Block if fraud score is too high
-        if (fraudCheck.shouldBlock) {
-            await SecurityAuditService.logEvent({
-                userId: user.id,
-                eventType: 'login_blocked',
-                eventCategory: 'authentication',
-                severity: 'warning',
-                ipAddress,
-                userAgent,
-                deviceId: deviceInfo.deviceId,
-                eventData: { fraudCheck },
-                success: false
-            });
-            throw ApiError.unauthorized('Login blocked due to suspicious activity');
-        }
-
-        // Attempt login
-        const loginResult = await AuthService.login({ email, password }, deviceInfo);
-
-        // Update login attempt as successful
-        await FraudDetectionService.updateLoginAttemptSuccess(email, ipAddress, true);
-
-        // Register/update device
-        const isNewDevice = !(await DeviceManagementService.findUserDevice(user.id, deviceInfo.deviceId));
-        await DeviceManagementService.registerDevice(user.id, deviceInfo, false);
-
-        // Check if MFA is required
-        const mfaStatus = await MfaService.getMfaStatus(user.id);
-        const requireMfa = mfaStatus.totpEnabled || fraudCheck.shouldRequireMfa || isNewDevice;
-
-        if (requireMfa && mfaStatus.totpEnabled) {
-            // Return partial success, require MFA
-            res.json({
-                success: true,
-                requireMfa: true,
-                user: {
-                    id: loginResult.user.id,
-                    email: loginResult.user.email,
-                    firstName: loginResult.user.firstName,
-                    lastName: loginResult.user.lastName
-                },
-                fraudCheck: {
-                    riskLevel: fraudCheck.riskLevel,
-                    flags: fraudCheck.flags
-                }
-            });
-        } else {
-            // Complete login
-            res.json({
-                success: true,
-                user: loginResult.user,
-                tokens: loginResult.tokens,
-                isNewDevice,
-                fraudCheck: {
-                    riskLevel: fraudCheck.riskLevel,
-                    flags: fraudCheck.flags
-                }
-            });
-        }
-    } catch (error) {
-        next(error);
-    }
-});
-
-/**
- * Verify MFA token and complete login
- */
-router.post('/login/mfa', async (req, res, next) => {
-    try {
-        const { email, token, deviceId } = req.body;
-        const ipAddress = req.ip || req.connection.remoteAddress || '';
-        const userAgent = req.get('User-Agent') || '';
-
-        const user = await AuthService.findUserByEmail(email);
-        if (!user) {
-            throw ApiError.unauthorized('Invalid session');
-        }
-
-        // Verify MFA token
-        const mfaResult = await MfaService.verifyTotp(user.id, token);
-        if (!mfaResult.success) {
-            throw ApiError.unauthorized('Invalid MFA token');
-        }
-
-        // Parse device information
-        const deviceInfo = DeviceManagementService.parseDeviceInfo(
-            userAgent,
-            ipAddress,
-            deviceId
-        );
-
-        // Generate tokens
-        const tokens = await AuthService.generateTokensPublic(user.id, deviceInfo);
-
-        // Update device as trusted if MFA was successful
-        if (mfaResult.success) {
-            await DeviceManagementService.trustDevice(user.id, deviceInfo.deviceId);
-        }
-
-        res.json({
+        res.status(201).json({
             success: true,
-            user,
-            tokens,
-            backupCodeUsed: mfaResult.backupCodeUsed
+            message: 'User registered successfully. Please check your email for OTP verification.',
+            data: {
+                user: {
+                    id: result.user.id,
+                    email: result.user.email,
+                    username: result.user.username,
+                    firstName: result.user.firstName,
+                    lastName: result.user.lastName,
+                    requiresOTPVerification: !result.user.isPhoneVerified
+                },
+                tokens: result.tokens
+            }
         });
     } catch (error) {
         next(error);
@@ -160,64 +37,330 @@ router.post('/login/mfa', async (req, res, next) => {
 });
 
 /**
- * OAuth login routes
+ * User login
  */
-router.get('/oauth/google', passport.authenticate('google', {
+router.post('/login', validateRequest(authValidation.login), async (req, res, next) => {
+    try {
+        const { email, password } = req.body;
+        const ipAddress = req.ip || req.connection.remoteAddress || '';
+        const userAgent = req.get('User-Agent') || '';
+
+        const deviceInfo = {
+            ipAddress,
+            userAgent,
+            deviceId: req.body.deviceId || `${ipAddress}_${userAgent}`
+        };
+
+        const result = await AuthService.login({ email, password }, deviceInfo);
+
+        res.json({
+            success: true,
+            message: 'Login successful',
+            data: {
+                user: {
+                    id: result.user.id,
+                    email: result.user.email,
+                    username: result.user.username,
+                    firstName: result.user.firstName,
+                    lastName: result.user.lastName
+                },
+                tokens: result.tokens
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Refresh access token
+ */
+router.post('/refresh', validateRequest(authValidation.refreshToken), async (req, res, next) => {
+    try {
+        const { refreshToken } = req.body;
+        const tokens = await AuthService.refreshToken(refreshToken);
+
+        res.json({
+            success: true,
+            message: 'Token refreshed successfully',
+            data: { tokens }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Logout user
+ */
+router.post('/logout', validateRequest(authValidation.logout), async (req, res, next) => {
+    try {
+        const { refreshToken } = req.body;
+        await AuthService.logout(refreshToken);
+
+        res.json({
+            success: true,
+            message: 'Logout successful'
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Logout from all devices
+ */
+router.post('/logout-all', authMiddleware, async (req, res, next) => {
+    try {
+        const userId = (req as any).user.userId;
+        await AuthService.logoutAll(userId);
+
+        res.json({
+            success: true,
+            message: 'Logged out from all devices successfully'
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Change password
+ */
+router.post('/change-password', authMiddleware, validateRequest(authValidation.changePassword), async (req, res, next) => {
+    try {
+        const userId = (req as any).user.userId;
+        const { currentPassword, newPassword } = req.body;
+
+        await AuthService.changePassword(userId, currentPassword, newPassword);
+
+        res.json({
+            success: true,
+            message: 'Password changed successfully'
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Send OTP for phone verification
+ */
+router.post('/send-otp', authMiddleware, async (req, res, next) => {
+    try {
+        const userId = (req as any).user.userId;
+        const result = await AuthService.sendOTP(userId);
+
+        res.json({
+            success: true,
+            message: result.message,
+            data: { otpId: result.otpId }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Verify OTP
+ */
+router.post('/verify-otp', authMiddleware, validateRequest(authValidation.verifyOTP), async (req, res, next) => {
+    try {
+        const userId = (req as any).user.userId;
+        const { otp } = req.body;
+
+        const result = await AuthService.verifyOTP(userId, otp);
+
+        res.json({
+            success: true,
+            message: result.message
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Resend OTP
+ */
+router.post('/resend-otp', authMiddleware, async (req, res, next) => {
+    try {
+        const userId = (req as any).user.userId;
+        const result = await AuthService.resendOTP(userId);
+
+        res.json({
+            success: true,
+            message: result.message
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Verify email with token
+ */
+router.post('/verify-email', validateRequest(authValidation.verifyEmail), async (req, res, next) => {
+    try {
+        const { email, token } = req.body;
+        const result = await AuthService.verifyEmail(email, token);
+
+        res.json({
+            success: true,
+            message: result.message
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Verify JWT token
+ */
+router.post('/verify-token', validateRequest(authValidation.verifyToken), async (req, res, next) => {
+    try {
+        const { token } = req.body;
+        const payload = await AuthService.verifyAccessToken(token);
+
+        res.json({
+            success: true,
+            message: 'Token is valid',
+            data: { payload }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * Google OAuth routes
+ */
+router.get('/google', passport.authenticate('google', {
     scope: ['profile', 'email']
 }));
 
-router.get('/oauth/google/callback',
+router.get('/google/callback',
     passport.authenticate('google', { session: false }),
     async (req, res, next) => {
         try {
-            const result = req.user as any;
+            const user = req.user as any;
             const redirectUrl = process.env['FRONTEND_URL'] || 'http://localhost:3000';
 
-            if (result.isNewUser) {
-                res.redirect(`${redirectUrl}/welcome?token=${result.tokens.accessToken}`);
+            // Generate tokens for the OAuth user
+            const tokens = await AuthService.generateTokensPublic(user.id);
+
+            if (user.isNewUser) {
+                res.redirect(`${redirectUrl}/welcome?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
             } else {
-                res.redirect(`${redirectUrl}/dashboard?token=${result.tokens.accessToken}`);
+                res.redirect(`${redirectUrl}/dashboard?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
             }
         } catch (error) {
-            next(error);
+            Logger.error('Google OAuth callback error', error as Error);
+            const redirectUrl = process.env['FRONTEND_URL'] || 'http://localhost:3000';
+            res.redirect(`${redirectUrl}/login?error=oauth_failed`);
         }
     }
 );
 
-router.get('/oauth/facebook', passport.authenticate('facebook', {
-    scope: ['email']
-}));
+/**
+ * Apple OAuth routes
+ */
+router.get('/apple', passport.authenticate('apple'));
 
-router.get('/oauth/facebook/callback',
-    passport.authenticate('facebook', { session: false }),
+router.post('/apple/callback',
+    passport.authenticate('apple', { session: false }),
     async (req, res, next) => {
         try {
-            const result = req.user as any;
+            const user = req.user as any;
             const redirectUrl = process.env['FRONTEND_URL'] || 'http://localhost:3000';
 
-            res.redirect(`${redirectUrl}/dashboard?token=${result.tokens.accessToken}`);
+            // Generate tokens for the OAuth user
+            const tokens = await AuthService.generateTokensPublic(user.id);
+
+            if (user.isNewUser) {
+                res.redirect(`${redirectUrl}/welcome?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+            } else {
+                res.redirect(`${redirectUrl}/dashboard?token=${tokens.accessToken}&refresh=${tokens.refreshToken}`);
+            }
         } catch (error) {
-            next(error);
+            Logger.error('Apple OAuth callback error', error as Error);
+            const redirectUrl = process.env['FRONTEND_URL'] || 'http://localhost:3000';
+            res.redirect(`${redirectUrl}/login?error=oauth_failed`);
         }
     }
 );
 
-router.get('/oauth/github', passport.authenticate('github', {
-    scope: ['user:email']
-}));
+/**
+ * Get OAuth authorization URL
+ */
+router.get('/oauth/:provider/url', async (req, res, next) => {
+    try {
+        const { provider } = req.params;
+        const { redirectUri } = req.query;
 
-router.get('/oauth/github/callback',
-    passport.authenticate('github', { session: false }),
-    async (req, res, next) => {
-        try {
-            const result = req.user as any;
-            const redirectUrl = process.env['FRONTEND_URL'] || 'http://localhost:3000';
-
-            res.redirect(`${redirectUrl}/dashboard?token=${result.tokens.accessToken}`);
-        } catch (error) {
-            next(error);
+        if (provider !== 'google' && provider !== 'apple') {
+            throw ApiError.badRequest('Unsupported OAuth provider');
         }
+
+        const authUrl = await AuthService.getOAuthAuthorizationUrl(
+            provider as 'google' | 'apple',
+            redirectUri as string
+        );
+
+        res.json({
+            success: true,
+            data: { authUrl }
+        });
+    } catch (error) {
+        next(error);
     }
-);
+});
+
+/**
+ * Handle OAuth callback (alternative to Passport routes)
+ */
+router.post('/oauth/:provider/callback', async (req, res, next) => {
+    try {
+        const { provider } = req.params;
+        const { code, state } = req.body;
+        const ipAddress = req.ip || req.connection.remoteAddress || '';
+        const userAgent = req.get('User-Agent') || '';
+
+        if (provider !== 'google' && provider !== 'apple') {
+            throw ApiError.badRequest('Unsupported OAuth provider');
+        }
+
+        const deviceInfo = {
+            ipAddress,
+            userAgent,
+            deviceId: req.body.deviceId || `${ipAddress}_${userAgent}`
+        };
+
+        const result = await AuthService.handleOAuthCallback(
+            provider as 'google' | 'apple',
+            code,
+            state,
+            deviceInfo
+        );
+
+        res.json({
+            success: true,
+            message: result.isNewUser ? 'Account created successfully' : 'Login successful',
+            data: {
+                user: {
+                    id: result.user.id,
+                    email: result.user.email,
+                    username: result.user.username,
+                    firstName: result.user.firstName,
+                    lastName: result.user.lastName
+                },
+                tokens: result.tokens,
+                isNewUser: result.isNewUser
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
 
 export default router;

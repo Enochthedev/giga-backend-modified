@@ -6,11 +6,59 @@ export interface User {
     id: string;
     email: string;
     firstName: string;
-    lastName: string;
-    phone?: string;
-    dateOfBirth?: Date;
+    lastName?: string;
+    otherNames?: string;
+    username: string;
+    phone: string;
+
+    // Address Information
+    country: string;
+    address: string;
+    street: string;
+    city: string;
+    zipCode: string;
+
+    // Personal Information
+    gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
+    weight?: number;
+    maritalStatus: 'single' | 'married' | 'divorced' | 'widowed' | 'prefer-not-to-say';
+    ageGroup: '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65+';
+    areaOfInterest: string;
+
+    // Profile
+    profilePicture?: string;
+
+    // OAuth Integration
+    oauthProvider?: 'google' | 'apple';
+    oauthId?: string;
+    oauthAccessToken?: string;
+    oauthRefreshToken?: string;
+
+    // Verification Status
     isActive: boolean;
-    isVerified: boolean;
+    isEmailVerified: boolean;
+    isPhoneVerified: boolean;
+
+    // OTP Management
+    otpCode?: string;
+    otpExpires?: Date;
+
+    // Email Verification
+    emailVerificationToken?: string;
+    emailVerificationExpires?: Date;
+
+    // Ratings & Reviews
+    ratings: number[];
+    averageRating: number;
+
+    // Taxi Service Integration
+    taxiProfileId?: string;
+    taxiProfileType: 'TaxiDriver' | 'TaxiCustomer';
+
+    // Payment Integration
+    creditCard?: string;
+
+    // Timestamps
     lastLoginAt?: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -18,18 +66,54 @@ export interface User {
 
 export interface CreateUserData {
     email: string;
-    password: string;
+    password?: string; // Optional for OAuth users
     firstName: string;
-    lastName: string;
-    phone?: string;
-    dateOfBirth?: Date;
+    lastName?: string;
+    otherNames?: string;
+    username: string;
+    phone: string;
+
+    // Address Information
+    country: string;
+    address: string;
+    street: string;
+    city: string;
+    zipCode: string;
+
+    // Personal Information
+    gender: 'male' | 'female' | 'other' | 'prefer-not-to-say';
+    weight?: number;
+    maritalStatus: 'single' | 'married' | 'divorced' | 'widowed' | 'prefer-not-to-say';
+    ageGroup: '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65+';
+    areaOfInterest: string;
+
+    // OAuth data (for OAuth users)
+    oauthProvider?: 'google' | 'apple';
+    oauthId?: string;
+    oauthAccessToken?: string;
+    oauthRefreshToken?: string;
+
+    // Profile
+    profilePicture?: string;
 }
 
 export interface UpdateUserData {
     firstName?: string;
     lastName?: string;
-    phone?: string;
+    otherNames?: string;
+    country?: string;
+    address?: string;
+    street?: string;
+    phone?: string
     dateOfBirth?: Date;
+    city?: string;
+    zipCode?: string;
+    gender?: 'male' | 'female' | 'other' | 'prefer-not-to-say';
+    weight?: number;
+    maritalStatus?: 'single' | 'married' | 'divorced' | 'widowed' | 'prefer-not-to-say';
+    ageGroup?: '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65+';
+    areaOfInterest?: string;
+    profilePicture?: string;
 }
 
 export interface UserWithRoles extends User {
@@ -60,24 +144,76 @@ export class UserModel {
                 throw ApiError.conflict('User with this email already exists');
             }
 
-            // Hash password
-            const saltRounds = parseInt(process.env['BCRYPT_ROUNDS'] || '12');
-            const passwordHash = await bcrypt.hash(userData.password, saltRounds);
+            // Check if username is taken
+            const existingUsername = await this.findByUsername(userData.username);
+            if (existingUsername) {
+                throw ApiError.conflict('Username already taken');
+            }
+
+            // Check if phone number is taken
+            const existingPhone = await this.findByPhone(userData.phone);
+            if (existingPhone) {
+                throw ApiError.conflict('Phone number already taken');
+            }
+
+            // Hash password (only for email/password users)
+            let passwordHash = null;
+            if (userData.password) {
+                const saltRounds = parseInt(process.env['BCRYPT_ROUNDS'] || '12');
+                passwordHash = await bcrypt.hash(userData.password, saltRounds);
+            }
+
+            // Generate OTP for phone verification
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+            // Generate email verification token
+            const emailToken = this.generateRandomString(6);
+            const emailExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
             const query = `
-                INSERT INTO users (email, password_hash, first_name, last_name, phone, date_of_birth)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id, email, first_name, last_name, phone, date_of_birth, 
-                         is_active, is_verified, last_login_at, created_at, updated_at
+                INSERT INTO users (
+                    email, password_hash, first_name, last_name, other_names, username, phone,
+                    country, address, street, city, zip_code,
+                    gender, weight, marital_status, age_group, area_of_interest,
+                    profile_picture, oauth_provider, oauth_id, oauth_access_token, oauth_refresh_token,
+                    otp_code, otp_expires, email_verification_token, email_verification_expires,
+                    is_email_verified, is_phone_verified, taxi_profile_type
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+                RETURNING *
             `;
 
             const values = [
                 userData.email.toLowerCase(),
                 passwordHash,
                 userData.firstName,
-                userData.lastName,
-                userData.phone || null,
-                userData.dateOfBirth || null
+                userData.lastName || null,
+                userData.otherNames || null,
+                userData.username.toLowerCase(),
+                userData.phone,
+                userData.country,
+                userData.address,
+                userData.street,
+                userData.city,
+                userData.zipCode,
+                userData.gender,
+                userData.weight || null,
+                userData.maritalStatus,
+                userData.ageGroup,
+                userData.areaOfInterest,
+                userData.profilePicture || null,
+                userData.oauthProvider || null,
+                userData.oauthId || null,
+                userData.oauthAccessToken || null,
+                userData.oauthRefreshToken || null,
+                userData.oauthProvider ? null : otp, // Only set OTP for email/password users
+                userData.oauthProvider ? null : otpExpires,
+                emailToken,
+                emailExpires,
+                userData.oauthProvider ? true : false, // OAuth users have verified emails
+                false, // Phone verification required for all users
+                'TaxiCustomer' // Default taxi profile type
             ];
 
             const result = await DatabaseConnection.query(query, values);
@@ -125,9 +261,7 @@ export class UserModel {
     public static async findByEmail(email: string): Promise<User | null> {
         try {
             const query = `
-                SELECT id, email, first_name, last_name, phone, date_of_birth,
-                       is_active, is_verified, last_login_at, created_at, updated_at
-                FROM users
+                SELECT * FROM users
                 WHERE email = $1 AND is_active = true
             `;
 
@@ -140,6 +274,72 @@ export class UserModel {
             return this.mapDbUserToUser(result.rows[0]);
         } catch (error) {
             throw ApiError.internal('Failed to find user by email');
+        }
+    }
+
+    /**
+     * Find user by username
+     */
+    public static async findByUsername(username: string): Promise<User | null> {
+        try {
+            const query = `
+                SELECT * FROM users
+                WHERE username = $1 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [username.toLowerCase()]);
+
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            return this.mapDbUserToUser(result.rows[0]);
+        } catch (error) {
+            throw ApiError.internal('Failed to find user by username');
+        }
+    }
+
+    /**
+     * Find user by phone number
+     */
+    public static async findByPhone(phone: string): Promise<User | null> {
+        try {
+            const query = `
+                SELECT * FROM users
+                WHERE phone = $1 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [phone]);
+
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            return this.mapDbUserToUser(result.rows[0]);
+        } catch (error) {
+            throw ApiError.internal('Failed to find user by phone');
+        }
+    }
+
+    /**
+     * Find user by OAuth provider and ID
+     */
+    public static async findByOAuthId(provider: string, oauthId: string): Promise<User | null> {
+        try {
+            const query = `
+                SELECT * FROM users
+                WHERE oauth_provider = $1 AND oauth_id = $2 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [provider, oauthId]);
+
+            if (result.rows.length === 0) {
+                return null;
+            }
+
+            return this.mapDbUserToUser(result.rows[0]);
+        } catch (error) {
+            throw ApiError.internal('Failed to find user by OAuth ID');
         }
     }
 
@@ -403,6 +603,353 @@ export class UserModel {
     }
 
     /**
+     * Generate and save OTP for user
+     */
+    public static async generateOTP(userId: string): Promise<string> {
+        try {
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+            const query = `
+                UPDATE users
+                SET otp_code = $1, otp_expires = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [otp, otpExpires, userId]);
+
+            if (result.rowCount === 0) {
+                throw ApiError.notFound('User not found');
+            }
+
+            return otp;
+        } catch (error) {
+            if (error instanceof ApiError) {
+                throw error;
+            }
+            throw ApiError.internal('Failed to generate OTP');
+        }
+    }
+
+    /**
+     * Verify OTP for user
+     */
+    public static async verifyOTP(userId: string, otp: string): Promise<boolean> {
+        try {
+            const query = `
+                SELECT otp_code, otp_expires FROM users
+                WHERE id = $1 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [userId]);
+
+            if (result.rows.length === 0) {
+                return false;
+            }
+
+            const user = result.rows[0];
+
+            if (!user.otp_code || !user.otp_expires) {
+                return false;
+            }
+
+            if (new Date() > user.otp_expires) {
+                // OTP expired, clear it
+                await this.clearOTP(userId);
+                return false;
+            }
+
+            if (user.otp_code === otp) {
+                // OTP verified, mark phone as verified and clear OTP
+                await this.verifyPhone(userId);
+                await this.clearOTP(userId);
+                return true;
+            }
+
+            return false;
+        } catch (error) {
+            throw ApiError.internal('Failed to verify OTP');
+        }
+    }
+
+    /**
+     * Clear OTP for user
+     */
+    public static async clearOTP(userId: string): Promise<void> {
+        try {
+            const query = `
+                UPDATE users
+                SET otp_code = NULL, otp_expires = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1 AND is_active = true
+            `;
+
+            await DatabaseConnection.query(query, [userId]);
+        } catch (error) {
+            throw ApiError.internal('Failed to clear OTP');
+        }
+    }
+
+    /**
+     * Verify user phone
+     */
+    public static async verifyPhone(userId: string): Promise<void> {
+        try {
+            const query = `
+                UPDATE users
+                SET is_phone_verified = true, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [userId]);
+
+            if (result.rowCount === 0) {
+                throw ApiError.notFound('User not found');
+            }
+        } catch (error) {
+            if (error instanceof ApiError) {
+                throw error;
+            }
+            throw ApiError.internal('Failed to verify phone');
+        }
+    }
+
+    /**
+     * Verify email with token
+     */
+    public static async verifyEmailWithToken(email: string, token: string): Promise<boolean> {
+        try {
+            const query = `
+                UPDATE users
+                SET is_email_verified = true, email_verification_token = NULL, 
+                    email_verification_expires = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE email = $1 AND email_verification_token = $2 
+                    AND email_verification_expires > CURRENT_TIMESTAMP
+                    AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [email.toLowerCase(), token]);
+
+            return result.rowCount > 0;
+        } catch (error) {
+            throw ApiError.internal('Failed to verify email');
+        }
+    }
+
+    /**
+     * Add rating to user
+     */
+    public static async addRating(userId: string, rating: number): Promise<void> {
+        try {
+            // Get current ratings
+            const query = `
+                SELECT ratings FROM users
+                WHERE id = $1 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [userId]);
+
+            if (result.rows.length === 0) {
+                throw ApiError.notFound('User not found');
+            }
+
+            const currentRatings = result.rows[0].ratings || [];
+            const newRatings = [...currentRatings, rating];
+            const averageRating = newRatings.reduce((sum, r) => sum + r, 0) / newRatings.length;
+
+            const updateQuery = `
+                UPDATE users
+                SET ratings = $1, average_rating = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3 AND is_active = true
+            `;
+
+            await DatabaseConnection.query(updateQuery, [JSON.stringify(newRatings), averageRating, userId]);
+        } catch (error) {
+            if (error instanceof ApiError) {
+                throw error;
+            }
+            throw ApiError.internal('Failed to add rating');
+        }
+    }
+
+    /**
+     * Update OAuth tokens
+     */
+    public static async updateOAuthTokens(userId: string, accessToken: string, refreshToken?: string): Promise<void> {
+        try {
+            const query = `
+                UPDATE users
+                SET oauth_access_token = $1, oauth_refresh_token = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [accessToken, refreshToken || null, userId]);
+
+            if (result.rowCount === 0) {
+                throw ApiError.notFound('User not found');
+            }
+        } catch (error) {
+            if (error instanceof ApiError) {
+                throw error;
+            }
+            throw ApiError.internal('Failed to update OAuth tokens');
+        }
+    }
+
+    /**
+     * Find user by OAuth provider and ID
+     */
+    public static async findByOAuthProvider(provider: string, providerId: string): Promise<User | null> {
+        return this.findByOAuthId(provider, providerId);
+    }
+
+    /**
+     * Create OAuth user
+     */
+    public static async createOAuthUser(oauthData: {
+        email: string;
+        firstName: string;
+        lastName: string;
+        profilePicture?: string;
+        oauthProvider: 'google' | 'apple';
+        oauthId: string;
+        oauthAccessToken?: string;
+        oauthRefreshToken?: string;
+        isVerified: boolean;
+    }): Promise<User> {
+        const userData: CreateUserData = {
+            email: oauthData.email,
+            firstName: oauthData.firstName,
+            lastName: oauthData.lastName,
+            username: `${oauthData.oauthProvider}_${oauthData.oauthId}`,
+            phone: '0000000000', // Default phone, user can update later
+            country: 'Not specified',
+            address: 'Not specified',
+            street: 'Not specified',
+            city: 'Not specified',
+            zipCode: '00000',
+            gender: 'prefer-not-to-say',
+            weight: 70,
+            maritalStatus: 'prefer-not-to-say',
+            ageGroup: '25-34',
+            areaOfInterest: 'General',
+            profilePicture: oauthData.profilePicture,
+            oauthProvider: oauthData.oauthProvider,
+            oauthId: oauthData.oauthId,
+            oauthAccessToken: oauthData.oauthAccessToken,
+            oauthRefreshToken: oauthData.oauthRefreshToken
+        };
+
+        return this.create(userData);
+    }
+
+    /**
+     * Link OAuth account to existing user
+     */
+    public static async linkOAuthAccount(userId: string, oauthData: {
+        provider: 'google' | 'apple';
+        providerId: string;
+        accessToken?: string;
+        refreshToken?: string;
+    }): Promise<User> {
+        try {
+            const query = `
+                UPDATE users
+                SET oauth_provider = $1, oauth_id = $2, oauth_access_token = $3, 
+                    oauth_refresh_token = $4, is_email_verified = true, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $5 AND is_active = true
+                RETURNING *
+            `;
+
+            const result = await DatabaseConnection.query(query, [
+                oauthData.provider,
+                oauthData.providerId,
+                oauthData.accessToken || null,
+                oauthData.refreshToken || null,
+                userId
+            ]);
+
+            if (result.rows.length === 0) {
+                throw ApiError.notFound('User not found');
+            }
+
+            return this.mapDbUserToUser(result.rows[0]);
+        } catch (error) {
+            if (error instanceof ApiError) {
+                throw error;
+            }
+            throw ApiError.internal('Failed to link OAuth account');
+        }
+    }
+
+    /**
+     * Update OAuth tokens for user
+     */
+    public static async updateOAuthTokens(userId: string, tokens: {
+        accessToken?: string;
+        refreshToken?: string;
+    }): Promise<void> {
+        try {
+            const query = `
+                UPDATE users
+                SET oauth_access_token = $1, oauth_refresh_token = $2, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $3 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [
+                tokens.accessToken || null,
+                tokens.refreshToken || null,
+                userId
+            ]);
+
+            if (result.rowCount === 0) {
+                throw ApiError.notFound('User not found');
+            }
+        } catch (error) {
+            if (error instanceof ApiError) {
+                throw error;
+            }
+            throw ApiError.internal('Failed to update OAuth tokens');
+        }
+    }
+
+    /**
+     * Unlink OAuth account from user
+     */
+    public static async unlinkOAuthAccount(userId: string, provider: string): Promise<void> {
+        try {
+            const query = `
+                UPDATE users
+                SET oauth_provider = NULL, oauth_id = NULL, oauth_access_token = NULL, 
+                    oauth_refresh_token = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE id = $1 AND oauth_provider = $2 AND is_active = true
+            `;
+
+            const result = await DatabaseConnection.query(query, [userId, provider]);
+
+            if (result.rowCount === 0) {
+                throw ApiError.notFound('User not found or OAuth account not linked');
+            }
+        } catch (error) {
+            if (error instanceof ApiError) {
+                throw error;
+            }
+            throw ApiError.internal('Failed to unlink OAuth account');
+        }
+    }
+
+    /**
+     * Generate random string for tokens
+     */
+    private static generateRandomString(length: number): string {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        let result = '';
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+
+    /**
      * Map database user to User interface
      */
     private static mapDbUserToUser(dbUser: any): User {
@@ -411,10 +958,58 @@ export class UserModel {
             email: dbUser.email,
             firstName: dbUser.first_name,
             lastName: dbUser.last_name,
+            otherNames: dbUser.other_names,
+            username: dbUser.username,
             phone: dbUser.phone,
-            dateOfBirth: dbUser.date_of_birth,
+
+            // Address Information
+            country: dbUser.country,
+            address: dbUser.address,
+            street: dbUser.street,
+            city: dbUser.city,
+            zipCode: dbUser.zip_code,
+
+            // Personal Information
+            gender: dbUser.gender,
+            weight: dbUser.weight,
+            maritalStatus: dbUser.marital_status,
+            ageGroup: dbUser.age_group,
+            areaOfInterest: dbUser.area_of_interest,
+
+            // Profile
+            profilePicture: dbUser.profile_picture,
+
+            // OAuth Integration
+            oauthProvider: dbUser.oauth_provider,
+            oauthId: dbUser.oauth_id,
+            oauthAccessToken: dbUser.oauth_access_token,
+            oauthRefreshToken: dbUser.oauth_refresh_token,
+
+            // Verification Status
             isActive: dbUser.is_active,
-            isVerified: dbUser.is_verified,
+            isEmailVerified: dbUser.is_email_verified,
+            isPhoneVerified: dbUser.is_phone_verified,
+
+            // OTP Management
+            otpCode: dbUser.otp_code,
+            otpExpires: dbUser.otp_expires,
+
+            // Email Verification
+            emailVerificationToken: dbUser.email_verification_token,
+            emailVerificationExpires: dbUser.email_verification_expires,
+
+            // Ratings & Reviews
+            ratings: dbUser.ratings ? JSON.parse(dbUser.ratings) : [],
+            averageRating: dbUser.average_rating || 0,
+
+            // Taxi Service Integration
+            taxiProfileId: dbUser.taxi_profile_id,
+            taxiProfileType: dbUser.taxi_profile_type || 'TaxiCustomer',
+
+            // Payment Integration
+            creditCard: dbUser.credit_card,
+
+            // Timestamps
             lastLoginAt: dbUser.last_login_at,
             createdAt: dbUser.created_at,
             updatedAt: dbUser.updated_at

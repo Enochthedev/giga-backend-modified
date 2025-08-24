@@ -68,25 +68,25 @@ scrape_configs:
   # Business Services
   - job_name: 'ecommerce-service'
     static_configs:
-      - targets: ['ecommerce-backend:3004']
+      - targets: ['ecommerce-service:4000']
     metrics_path: '/metrics'
     scrape_interval: 10s
 
   - job_name: 'hotel-service'
     static_configs:
-      - targets: ['hotel-service:3005']
+      - targets: ['hotel-service:4001']
     metrics_path: '/metrics'
     scrape_interval: 10s
 
   - job_name: 'taxi-service'
     static_configs:
-      - targets: ['giga_taxi_main:3006', 'giga_taxi_driver:3007']
+      - targets: ['taxi-service:8003']
     metrics_path: '/metrics'
     scrape_interval: 10s
 
   - job_name: 'advertisement-service'
     static_configs:
-      - targets: ['advertisement-service:3008']
+      - targets: ['advertisement-service:4003']
     metrics_path: '/metrics'
     scrape_interval: 10s
 

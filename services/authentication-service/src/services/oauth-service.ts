@@ -1,398 +1,481 @@
+import axios from 'axios';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
-import { Strategy as FacebookStrategy } from 'passport-facebook';
-import { Strategy as GitHubStrategy } from 'passport-github2';
+import { Strategy as AppleStrategy } from 'passport-apple';
 import { ApiError, Logger } from '@giga/common';
-import { UserModel, User, CreateUserData } from '../models/user-model';
-import { OAuthProviderModel } from '../models/oauth-provider-model';
-import { AuthService } from './auth-service';
-import { SecurityAuditService } from './security-audit-service';
+import { OAuthUserData } from './auth-service';
+import { UserModel } from '../models/user-model';
 
-export interface OAuthProfile {
-    id: string;
-    email: string;
-    firstName: string;
-    lastName: string;
-    provider: string;
-    profileData: any;
+interface GoogleTokenResponse {
+    access_token: string;
+    refresh_token?: string;
+    expires_in: number;
+    token_type: string;
+    scope: string;
 }
 
-export interface OAuthLoginResult {
-    user: User;
-    tokens: any;
-    isNewUser: boolean;
+interface GoogleUserInfo {
+    id: string;
+    email: string;
+    verified_email: boolean;
+    name: string;
+    given_name: string;
+    family_name: string;
+    picture: string;
+    locale: string;
+}
+
+interface AppleTokenResponse {
+    access_token: string;
+    token_type: string;
+    expires_in: number;
+    refresh_token?: string;
+    id_token: string;
+}
+
+interface AppleUserInfo {
+    sub: string;
+    email: string;
+    email_verified: boolean;
+    name?: {
+        firstName: string;
+        lastName: string;
+    };
 }
 
 /**
- * OAuth service for social login integration
+ * OAuth service for handling Google and Apple OAuth flows with Passport.js integration
  */
 export class OAuthService {
+    private static googleClientId = process.env.GOOGLE_CLIENT_ID;
+    private static googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    private static googleRedirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:8001/api/auth/google/callback';
+
+    private static appleClientId = process.env.APPLE_CLIENT_ID;
+    private static appleTeamId = process.env.APPLE_TEAM_ID;
+    private static appleKeyId = process.env.APPLE_KEY_ID;
+    private static applePrivateKeyPath = process.env.APPLE_PRIVATE_KEY_PATH;
+    private static appleRedirectUri = process.env.APPLE_REDIRECT_URI || 'http://localhost:8001/api/auth/apple/callback';
+
     /**
      * Initialize OAuth strategies
      */
     public static initialize(): void {
-        // Google OAuth Strategy
-        if (process.env['GOOGLE_CLIENT_ID'] && process.env['GOOGLE_CLIENT_SECRET']) {
-            passport.use(new GoogleStrategy({
-                clientID: process.env['GOOGLE_CLIENT_ID'],
-                clientSecret: process.env['GOOGLE_CLIENT_SECRET'],
-                callbackURL: process.env['GOOGLE_CALLBACK_URL'] || '/auth/google/callback'
-            }, async (accessToken, refreshToken, profile, done) => {
-                try {
-                    const oauthProfile: OAuthProfile = {
-                        id: profile.id,
-                        email: profile.emails?.[0]?.value || '',
-                        firstName: profile.name?.givenName || '',
-                        lastName: profile.name?.familyName || '',
-                        provider: 'google',
-                        profileData: {
-                            accessToken,
-                            refreshToken,
-                            profile: profile._json
-                        }
-                    };
+        this.initializeGoogleStrategy();
+        this.initializeAppleStrategy();
+        this.initializePassportSerialization();
+    }
 
-                    const result = await this.handleOAuthLogin(oauthProfile);
-                    return done(null, result);
-                } catch (error) {
-                    return done(error, null);
-                }
-            }));
+    /**
+     * Initialize Google OAuth strategy
+     */
+    private static initializeGoogleStrategy(): void {
+        if (!this.googleClientId || !this.googleClientSecret) {
+            Logger.warn('Google OAuth credentials not configured');
+            return;
         }
 
-        // Facebook OAuth Strategy
-        if (process.env['FACEBOOK_APP_ID'] && process.env['FACEBOOK_APP_SECRET']) {
-            passport.use(new FacebookStrategy({
-                clientID: process.env['FACEBOOK_APP_ID'],
-                clientSecret: process.env['FACEBOOK_APP_SECRET'],
-                callbackURL: process.env['FACEBOOK_CALLBACK_URL'] || '/auth/facebook/callback',
-                profileFields: ['id', 'emails', 'name']
-            }, async (accessToken, refreshToken, profile, done) => {
-                try {
-                    const oauthProfile: OAuthProfile = {
-                        id: profile.id,
-                        email: profile.emails?.[0]?.value || '',
-                        firstName: profile.name?.givenName || '',
-                        lastName: profile.name?.familyName || '',
-                        provider: 'facebook',
-                        profileData: {
-                            accessToken,
-                            refreshToken,
-                            profile: profile._json
-                        }
-                    };
+        passport.use(new GoogleStrategy({
+            clientID: this.googleClientId,
+            clientSecret: this.googleClientSecret,
+            callbackURL: this.googleRedirectUri,
+            scope: ['profile', 'email']
+        }, async (accessToken, refreshToken, profile, done) => {
+            try {
+                const oauthData = {
+                    provider: 'google' as const,
+                    providerId: profile.id,
+                    email: profile.emails?.[0]?.value,
+                    firstName: profile.name?.givenName || 'Google',
+                    lastName: profile.name?.familyName || 'User',
+                    profilePicture: profile.photos?.[0]?.value,
+                    accessToken,
+                    refreshToken
+                };
 
-                    const result = await this.handleOAuthLogin(oauthProfile);
-                    return done(null, result);
-                } catch (error) {
-                    return done(error, null);
-                }
-            }));
+                const user = await this.findOrCreateOAuthUser(oauthData);
+                return done(null, user);
+            } catch (error) {
+                Logger.error('Google OAuth strategy error', error as Error);
+                return done(error as Error);
+            }
+        }));
+    }
+
+    /**
+     * Initialize Apple OAuth strategy
+     */
+    private static initializeAppleStrategy(): void {
+        if (!this.appleClientId || !this.appleTeamId || !this.appleKeyId || !this.applePrivateKeyPath) {
+            Logger.warn('Apple OAuth credentials not configured');
+            return;
         }
 
-        // GitHub OAuth Strategy
-        if (process.env['GITHUB_CLIENT_ID'] && process.env['GITHUB_CLIENT_SECRET']) {
-            passport.use(new GitHubStrategy({
-                clientID: process.env['GITHUB_CLIENT_ID'],
-                clientSecret: process.env['GITHUB_CLIENT_SECRET'],
-                callbackURL: process.env['GITHUB_CALLBACK_URL'] || '/auth/github/callback'
-            }, async (accessToken, refreshToken, profile, done) => {
-                try {
-                    const oauthProfile: OAuthProfile = {
-                        id: profile.id,
-                        email: profile.emails?.[0]?.value || '',
-                        firstName: profile.displayName?.split(' ')[0] || '',
-                        lastName: profile.displayName?.split(' ').slice(1).join(' ') || '',
-                        provider: 'github',
-                        profileData: {
-                            accessToken,
-                            refreshToken,
-                            profile: profile._json
-                        }
-                    };
+        passport.use(new AppleStrategy({
+            clientID: this.appleClientId,
+            teamID: this.appleTeamId,
+            keyID: this.appleKeyId,
+            privateKeyLocation: this.applePrivateKeyPath,
+            callbackURL: this.appleRedirectUri,
+            passReqToCallback: true
+        }, async (req, accessToken, refreshToken, idToken, profile, done) => {
+            try {
+                const oauthData = {
+                    provider: 'apple' as const,
+                    providerId: profile.id,
+                    email: profile.email,
+                    firstName: 'Apple',
+                    lastName: 'User',
+                    accessToken,
+                    refreshToken
+                };
 
-                    const result = await this.handleOAuthLogin(oauthProfile);
-                    return done(null, result);
-                } catch (error) {
-                    return done(error, null);
-                }
-            }));
-        }
+                const user = await this.findOrCreateOAuthUser(oauthData);
+                return done(null, user);
+            } catch (error) {
+                Logger.error('Apple OAuth strategy error', error as Error);
+                return done(error as Error);
+            }
+        }));
+    }
 
+    /**
+     * Initialize Passport serialization
+     */
+    private static initializePassportSerialization(): void {
         passport.serializeUser((user: any, done) => {
-            done(null, user);
+            done(null, user.id);
         });
 
-        passport.deserializeUser((user: any, done) => {
-            done(null, user);
+        passport.deserializeUser(async (id: string, done) => {
+            try {
+                const user = await UserModel.findById(id);
+                done(null, user);
+            } catch (error) {
+                done(error);
+            }
         });
     }
 
     /**
-     * Handle OAuth login/registration
+     * Find or create OAuth user
      */
-    public static async handleOAuthLogin(
-        oauthProfile: OAuthProfile,
-        deviceInfo?: any
-    ): Promise<OAuthLoginResult> {
-        try {
-            // Check if OAuth provider already exists
-            let oauthProvider = await OAuthProviderModel.findByProviderUserId(
-                oauthProfile.provider,
-                oauthProfile.id
-            );
+    private static async findOrCreateOAuthUser(oauthData: {
+        provider: 'google' | 'apple';
+        providerId: string;
+        email?: string;
+        firstName: string;
+        lastName: string;
+        profilePicture?: string;
+        accessToken: string;
+        refreshToken?: string;
+    }) {
+        const { provider, providerId, email, firstName, lastName, profilePicture, accessToken, refreshToken } = oauthData;
 
-            let user: User;
-            let isNewUser = false;
+        // Check if user already exists with this OAuth ID
+        let user = await UserModel.findByOAuthId(provider, providerId);
 
-            if (oauthProvider) {
-                // Existing OAuth user
-                user = await UserModel.findById(oauthProvider.userId);
-                if (!user) {
-                    throw ApiError.notFound('User not found');
-                }
+        if (user) {
+            // Update OAuth tokens
+            await UserModel.updateOAuthTokens(user.id, accessToken, refreshToken);
+            return await UserModel.findById(user.id);
+        }
 
-                // Update OAuth provider data
-                await OAuthProviderModel.update(oauthProvider.id, {
-                    providerEmail: oauthProfile.email,
-                    providerData: oauthProfile.profileData
-                });
-            } else {
-                // Check if user exists with this email
-                const existingUser = await UserModel.findByEmail(oauthProfile.email);
+        // Check if user exists with this email
+        if (email) {
+            user = await UserModel.findByEmail(email);
 
-                if (existingUser) {
-                    // Link OAuth provider to existing user
-                    user = existingUser;
-                    await OAuthProviderModel.create({
-                        userId: user.id,
-                        provider: oauthProfile.provider,
-                        providerUserId: oauthProfile.id,
-                        providerEmail: oauthProfile.email,
-                        providerData: oauthProfile.profileData,
-                        isVerified: true
-                    });
-                } else {
-                    // Create new user
-                    const userData: CreateUserData = {
-                        email: oauthProfile.email,
-                        password: this.generateRandomPassword(), // Random password for OAuth users
-                        firstName: oauthProfile.firstName,
-                        lastName: oauthProfile.lastName
-                    };
-
-                    const { user: newUser } = await AuthService.register(userData);
-                    user = newUser;
-                    isNewUser = true;
-
-                    // Verify email automatically for OAuth users
-                    await UserModel.verifyEmail(user.id);
-
-                    // Create OAuth provider record
-                    await OAuthProviderModel.create({
-                        userId: user.id,
-                        provider: oauthProfile.provider,
-                        providerUserId: oauthProfile.id,
-                        providerEmail: oauthProfile.email,
-                        providerData: oauthProfile.profileData,
-                        isVerified: true
-                    });
-                }
+            if (user) {
+                // Link existing user to OAuth - this would require updating the user model
+                // For now, we'll create a new user to avoid conflicts
+                Logger.info(`User with email ${email} already exists, creating new OAuth user`);
             }
+        }
 
-            // Update last login
-            await UserModel.updateLastLogin(user.id);
+        // Create new OAuth user with default values
+        const newUserData = {
+            email: email || `${provider}_${providerId}@${provider}.com`,
+            firstName,
+            lastName,
+            username: `${provider}_${providerId}`,
+            phone: '0000000000', // Default phone, user can update later
+            country: 'Not specified',
+            address: 'Not specified',
+            street: 'Not specified',
+            city: 'Not specified',
+            zipCode: '00000',
+            gender: 'prefer-not-to-say' as const,
+            weight: 70,
+            maritalStatus: 'prefer-not-to-say' as const,
+            ageGroup: '25-34' as const,
+            areaOfInterest: 'General',
+            profilePicture,
+            oauthProvider: provider,
+            oauthId: providerId,
+            oauthAccessToken: accessToken,
+            oauthRefreshToken: refreshToken
+        };
 
-            // Generate tokens
-            const tokens = await AuthService.generateTokens(user.id, deviceInfo);
+        return await UserModel.create(newUserData);
+    }
 
-            // Log security event
-            await SecurityAuditService.logEvent({
-                userId: user.id,
-                eventType: 'oauth_login',
-                eventCategory: 'authentication',
-                severity: 'info',
-                eventData: {
-                    provider: oauthProfile.provider,
-                    isNewUser,
-                    email: oauthProfile.email
-                },
-                success: true
-            });
-
-            Logger.info('OAuth login successful', {
-                userId: user.id,
-                provider: oauthProfile.provider,
-                isNewUser
-            });
-
-            return { user, tokens, isNewUser };
-        } catch (error) {
-            // Log failed OAuth attempt
-            await SecurityAuditService.logEvent({
-                eventType: 'oauth_login_failed',
-                eventCategory: 'authentication',
-                severity: 'warning',
-                eventData: {
-                    provider: oauthProfile.provider,
-                    email: oauthProfile.email,
-                    error: error instanceof Error ? error.message : 'Unknown error'
-                },
-                success: false
-            });
-
-            if (error instanceof ApiError) {
-                throw error;
-            }
-            Logger.error('OAuth login failed', error as Error);
-            throw ApiError.internal('OAuth login failed');
+    /**
+     * Get OAuth authorization URL
+     */
+    public static async getAuthorizationUrl(provider: 'google' | 'apple', redirectUri?: string): Promise<string> {
+        switch (provider) {
+            case 'google':
+                return this.getGoogleAuthUrl(redirectUri);
+            case 'apple':
+                return this.getAppleAuthUrl(redirectUri);
+            default:
+                throw ApiError.badRequest(`Unsupported OAuth provider: ${provider}`);
         }
     }
 
     /**
-     * Link OAuth provider to existing user
+     * Handle OAuth callback
      */
-    public static async linkProvider(
-        userId: string,
-        oauthProfile: OAuthProfile
-    ): Promise<void> {
-        try {
-            // Check if provider is already linked to another user
-            const existingProvider = await OAuthProviderModel.findByProviderUserId(
-                oauthProfile.provider,
-                oauthProfile.id
-            );
-
-            if (existingProvider && existingProvider.userId !== userId) {
-                throw ApiError.conflict('This social account is already linked to another user');
-            }
-
-            if (existingProvider && existingProvider.userId === userId) {
-                throw ApiError.conflict('This social account is already linked to your account');
-            }
-
-            // Create OAuth provider record
-            await OAuthProviderModel.create({
-                userId,
-                provider: oauthProfile.provider,
-                providerUserId: oauthProfile.id,
-                providerEmail: oauthProfile.email,
-                providerData: oauthProfile.profileData,
-                isVerified: true
-            });
-
-            // Log security event
-            await SecurityAuditService.logEvent({
-                userId,
-                eventType: 'oauth_provider_linked',
-                eventCategory: 'account_management',
-                severity: 'info',
-                eventData: {
-                    provider: oauthProfile.provider,
-                    providerEmail: oauthProfile.email
-                },
-                success: true
-            });
-
-            Logger.info('OAuth provider linked successfully', {
-                userId,
-                provider: oauthProfile.provider
-            });
-        } catch (error) {
-            if (error instanceof ApiError) {
-                throw error;
-            }
-            Logger.error('Failed to link OAuth provider', error as Error);
-            throw ApiError.internal('Failed to link OAuth provider');
+    public static async handleCallback(
+        provider: 'google' | 'apple',
+        code: string,
+        state?: string
+    ): Promise<OAuthUserData> {
+        switch (provider) {
+            case 'google':
+                return this.handleGoogleCallback(code, state);
+            case 'apple':
+                return this.handleAppleCallback(code, state);
+            default:
+                throw ApiError.badRequest(`Unsupported OAuth provider: ${provider}`);
         }
     }
 
     /**
-     * Unlink OAuth provider from user
+     * Get Google OAuth authorization URL
      */
-    public static async unlinkProvider(userId: string, provider: string): Promise<void> {
+    private static getGoogleAuthUrl(redirectUri?: string): string {
+        const baseUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+        const params = new URLSearchParams({
+            client_id: this.googleClientId!,
+            redirect_uri: redirectUri || this.googleRedirectUri,
+            response_type: 'code',
+            scope: 'openid email profile',
+            access_type: 'offline',
+            prompt: 'consent'
+        });
+
+        return `${baseUrl}?${params.toString()}`;
+    }
+
+    /**
+     * Get Apple OAuth authorization URL
+     */
+    private static getAppleAuthUrl(redirectUri?: string): string {
+        const baseUrl = 'https://appleid.apple.com/auth/authorize';
+        const params = new URLSearchParams({
+            client_id: this.appleClientId!,
+            redirect_uri: redirectUri || this.appleRedirectUri,
+            response_type: 'code',
+            scope: 'name email',
+            response_mode: 'form_post'
+        });
+
+        return `${baseUrl}?${params.toString()}`;
+    }
+
+    /**
+     * Handle Google OAuth callback
+     */
+    private static async handleGoogleCallback(code: string, state?: string): Promise<OAuthUserData> {
         try {
-            const oauthProvider = await OAuthProviderModel.findByUserIdAndProvider(userId, provider);
-            if (!oauthProvider) {
-                throw ApiError.notFound('OAuth provider not found');
-            }
+            // Exchange code for tokens
+            const tokenResponse = await this.exchangeGoogleCode(code);
 
-            // Check if user has password or other OAuth providers
-            const user = await UserModel.findById(userId);
-            if (!user) {
-                throw ApiError.notFound('User not found');
-            }
+            // Get user info
+            const userInfo = await this.getGoogleUserInfo(tokenResponse.access_token);
 
-            const otherProviders = await OAuthProviderModel.findByUserId(userId);
-            const hasOtherProviders = otherProviders.filter(p => p.provider !== provider).length > 0;
-
-            // If no password and no other providers, prevent unlinking
-            if (!hasOtherProviders) {
-                // Check if user has a password set (this would require checking if password is not a random one)
-                // For now, we'll prevent unlinking if it's the only provider
-                throw ApiError.badRequest('Cannot unlink the only authentication method. Please set a password first.');
-            }
-
-            await OAuthProviderModel.delete(oauthProvider.id);
-
-            // Log security event
-            await SecurityAuditService.logEvent({
-                userId,
-                eventType: 'oauth_provider_unlinked',
-                eventCategory: 'account_management',
-                severity: 'info',
-                eventData: {
-                    provider,
-                    providerEmail: oauthProvider.providerEmail
-                },
-                success: true
-            });
-
-            Logger.info('OAuth provider unlinked successfully', {
-                userId,
-                provider
-            });
+            return {
+                provider: 'google',
+                providerId: userInfo.id,
+                email: userInfo.email,
+                firstName: userInfo.given_name,
+                lastName: userInfo.family_name,
+                profilePicture: userInfo.picture,
+                accessToken: tokenResponse.access_token,
+                refreshToken: tokenResponse.refresh_token
+            };
         } catch (error) {
-            if (error instanceof ApiError) {
-                throw error;
-            }
-            Logger.error('Failed to unlink OAuth provider', error as Error);
-            throw ApiError.internal('Failed to unlink OAuth provider');
+            Logger.error('Google OAuth callback failed', error as Error);
+            throw ApiError.internal('Google OAuth authentication failed');
         }
     }
 
     /**
-     * Get user's linked OAuth providers
+     * Handle Apple OAuth callback
      */
-    public static async getUserProviders(userId: string): Promise<Array<{
-        provider: string;
-        providerEmail: string;
-        isVerified: boolean;
-        linkedAt: Date;
-    }>> {
+    private static async handleAppleCallback(code: string, state?: string): Promise<OAuthUserData> {
         try {
-            const providers = await OAuthProviderModel.findByUserId(userId);
-            return providers.map(p => ({
-                provider: p.provider,
-                providerEmail: p.providerEmail || '',
-                isVerified: p.isVerified,
-                linkedAt: p.createdAt
-            }));
+            // Exchange code for tokens
+            const tokenResponse = await this.exchangeAppleCode(code);
+
+            // Decode ID token to get user info
+            const userInfo = this.decodeAppleIdToken(tokenResponse.id_token);
+
+            return {
+                provider: 'apple',
+                providerId: userInfo.sub,
+                email: userInfo.email,
+                firstName: userInfo.name?.firstName || '',
+                lastName: userInfo.name?.lastName || '',
+                accessToken: tokenResponse.access_token,
+                refreshToken: tokenResponse.refresh_token
+            };
         } catch (error) {
-            Logger.error('Failed to get user OAuth providers', error as Error);
-            throw ApiError.internal('Failed to get OAuth providers');
+            Logger.error('Apple OAuth callback failed', error as Error);
+            throw ApiError.internal('Apple OAuth authentication failed');
         }
     }
 
     /**
-     * Generate random password for OAuth users
+     * Exchange Google authorization code for tokens
      */
-    private static generateRandomPassword(): string {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-        let password = '';
-        for (let i = 0; i < 16; i++) {
-            password += chars.charAt(Math.floor(Math.random() * chars.length));
+    private static async exchangeGoogleCode(code: string): Promise<GoogleTokenResponse> {
+        const tokenUrl = 'https://oauth2.googleapis.com/token';
+
+        const params = {
+            client_id: this.googleClientId!,
+            client_secret: this.googleClientSecret!,
+            code,
+            grant_type: 'authorization_code',
+            redirect_uri: this.googleRedirectUri
+        };
+
+        const response = await axios.post(tokenUrl, params, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Get Google user information
+     */
+    private static async getGoogleUserInfo(accessToken: string): Promise<GoogleUserInfo> {
+        const userInfoUrl = 'https://www.googleapis.com/oauth2/v2/userinfo';
+
+        const response = await axios.get(userInfoUrl, {
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            }
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Exchange Apple authorization code for tokens
+     */
+    private static async exchangeAppleCode(code: string): Promise<AppleTokenResponse> {
+        const tokenUrl = 'https://appleid.apple.com/auth/token';
+
+        const params = {
+            client_id: this.appleClientId!,
+            client_secret: this.appleClientSecret!,
+            code,
+            grant_type: 'authorization_code',
+            redirect_uri: this.appleRedirectUri
+        };
+
+        const response = await axios.post(tokenUrl, params, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Decode Apple ID token (simplified - in production, use proper JWT verification)
+     */
+    private static decodeAppleIdToken(idToken: string): AppleUserInfo {
+        try {
+            // In production, you should verify the JWT signature
+            const payload = idToken.split('.')[1];
+            const decoded = JSON.parse(Buffer.from(payload, 'base64').toString());
+            return decoded;
+        } catch (error) {
+            throw ApiError.internal('Failed to decode Apple ID token');
         }
-        return password;
+    }
+
+    /**
+     * Refresh OAuth tokens
+     */
+    public static async refreshOAuthToken(
+        provider: 'google' | 'apple',
+        refreshToken: string
+    ): Promise<{ accessToken: string; refreshToken?: string }> {
+        switch (provider) {
+            case 'google':
+                return this.refreshGoogleToken(refreshToken);
+            case 'apple':
+                return this.refreshAppleToken(refreshToken);
+            default:
+                throw ApiError.badRequest(`Unsupported OAuth provider: ${provider}`);
+        }
+    }
+
+    /**
+     * Refresh Google access token
+     */
+    private static async refreshGoogleToken(refreshToken: string): Promise<{ accessToken: string; refreshToken?: string }> {
+        const tokenUrl = 'https://oauth2.googleapis.com/token';
+
+        const params = {
+            client_id: this.googleClientId!,
+            client_secret: this.googleClientSecret!,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token'
+        };
+
+        const response = await axios.post(tokenUrl, params, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        return {
+            accessToken: response.data.access_token,
+            refreshToken: response.data.refresh_token || refreshToken
+        };
+    }
+
+    /**
+     * Refresh Apple access token
+     */
+    private static async refreshAppleToken(refreshToken: string): Promise<{ accessToken: string; refreshToken?: string }> {
+        const tokenUrl = 'https://appleid.apple.com/auth/token';
+
+        const params = {
+            client_id: this.appleClientId!,
+            client_secret: this.appleClientSecret!,
+            refresh_token: refreshToken,
+            grant_type: 'refresh_token'
+        };
+
+        const response = await axios.post(tokenUrl, params, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        return {
+            accessToken: response.data.access_token,
+            refreshToken: response.data.refresh_token || refreshToken
+        };
     }
 }

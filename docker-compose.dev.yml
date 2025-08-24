@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   # Databases
   postgres:
@@ -13,10 +12,14 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations:/docker-entrypoint-initdb.d
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
     networks:
       - giga-network
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U giga_user -d giga_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
   redis:
     image: redis:7-alpine
     container_name: giga-redis
@@ -26,7 +29,11 @@ services:
       - redis_data:/data
     networks:
       - giga-network
-
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
   # Message Queue
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -41,7 +48,11 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - giga-network
-
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
   # Search Engine
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:8.8.2
@@ -57,7 +68,6 @@ services:
       - elasticsearch_data:/usr/share/elasticsearch/data
     networks:
       - giga-network
-
   # Monitoring
   prometheus:
     image: prom/prometheus:latest
@@ -69,7 +79,6 @@ services:
       - prometheus_data:/prometheus
     networks:
       - giga-network
-
   grafana:
     image: grafana/grafana:latest
     container_name: giga-grafana
@@ -81,7 +90,6 @@ services:
       - grafana_data:/var/lib/grafana
     networks:
       - giga-network
-
   # Services
   api-gateway:
     build:
@@ -101,7 +109,6 @@ services:
       - rabbitmq
     networks:
       - giga-network
-
   authentication-service:
     build:
       context: .
@@ -124,7 +131,6 @@ services:
       - rabbitmq
     networks:
       - giga-network
-
   payment-service:
     build:
       context: .
@@ -147,7 +153,6 @@ services:
       - rabbitmq
     networks:
       - giga-network
-
   notification-service:
     build:
       context: .
@@ -170,7 +175,6 @@ services:
       - rabbitmq
     networks:
       - giga-network
-
   search-service:
     build:
       context: .
@@ -193,7 +197,6 @@ services:
       - rabbitmq
     networks:
       - giga-network
-
   file-service:
     build:
       context: .
@@ -216,7 +219,6 @@ services:
       - rabbitmq
     networks:
       - giga-network
-
   analytics-service:
     build:
       context: .
@@ -240,6 +242,89 @@ services:
     networks:
       - giga-network
 
+  ecommerce-service:
+    build:
+      context: .
+      dockerfile: services/ecommerce-service/Dockerfile
+    container_name: giga-ecommerce-service
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - DATABASE_URL=postgresql://giga_user:giga_password@postgres:5432/giga_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=giga_dev
+      - DB_USER=giga_user
+      - DB_PASSWORD=giga_password
+    volumes:
+      - ./services/ecommerce-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+  hotel-service:
+    build:
+      context: .
+      dockerfile: services/hotel-service/Dockerfile
+    container_name: giga-hotel-service
+    ports:
+      - "4001:4001"
+    environment:
+      - NODE_ENV=development
+      - PORT=4001
+      - DATABASE_URL=postgresql://giga_user:giga_password@postgres:5432/giga_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=giga_dev
+      - DB_USER=giga_user
+      - DB_PASSWORD=giga_password
+    volumes:
+      - ./services/hotel-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
+
+  advertisement-service:
+    build:
+      context: .
+      dockerfile: services/advertisement-service/Dockerfile
+    container_name: giga-advertisement-service
+    ports:
+      - "4003:4003"
+    environment:
+      - NODE_ENV=development
+      - PORT=4003
+      - DATABASE_URL=postgresql://giga_user:giga_password@postgres:5432/giga_dev
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://giga_user:giga_password@rabbitmq:5672
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=giga_dev
+      - DB_USER=giga_user
+      - DB_PASSWORD=giga_password
+    volumes:
+      - ./services/advertisement-service:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - giga-network
 volumes:
   postgres_data:
   redis_data:
@@ -247,7 +332,6 @@ volumes:
   elasticsearch_data:
   prometheus_data:
   grafana_data:
-
 networks:
   giga-network:
     driver: bridge

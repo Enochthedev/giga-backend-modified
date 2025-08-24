@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 
 // Import services
 import WebSocketService from './services/websocket.service';
+import EventService from './services/event.service';
 
 // Import routes
 import driverRoutes from './routes/driver.routes';
@@ -16,6 +17,7 @@ import pricingRoutes from './routes/pricing.routes';
 import ratingRoutes from './routes/rating.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import routeRoutes from './routes/route.routes';
+import legacyRoutes from './routes/legacy-compatibility.routes';
 
 // Import utilities
 import ApiError from './utils/api-error';
@@ -89,6 +91,7 @@ app.use('/api/pricing', pricingRoutes);
 app.use('/api/ratings', ratingRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/routes', routeRoutes);
+app.use('/api/legacy', legacyRoutes);
 
 // 404 handler for undefined routes
 app.use('*', (req, res) => {
@@ -143,6 +146,14 @@ async function startServer() {
         await mongoose.connect(mongoUrl);
         console.log('✅ MongoDB connected successfully');
 
+        // Initialize Event Service (RabbitMQ)
+        try {
+            await EventService.connect();
+            console.log('✅ Event service connected to RabbitMQ');
+        } catch (error) {
+            console.warn('⚠️ Event service connection failed, continuing without RabbitMQ:', error);
+        }
+
         // Initialize WebSocket service
         const websocketService = new WebSocketService(server);
         console.log('✅ WebSocket service initialized');
@@ -180,6 +191,14 @@ async function gracefulShutdown(signal: string) {
         console.log('✅ Database connection closed');
     } catch (error) {
         console.error('❌ Error closing database connection:', error);
+    }
+
+    // Close event service connection
+    try {
+        await EventService.disconnect();
+        console.log('✅ Event service disconnected');
+    } catch (error) {
+        console.error('❌ Error closing event service connection:', error);
     }
 
     console.log('✅ Graceful shutdown completed');

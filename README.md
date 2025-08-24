@@ -1,35 +1,62 @@
 # Giga Multi-Service Platform
 
-A comprehensive microservices platform supporting ecommerce, taxi services, hotel booking, payments, and advertising functionality.
+A comprehensive microservices platform supporting ecommerce, taxi services, hotel booking, payments, and advertising functionality. This platform has been modernized from legacy services into a scalable, maintainable microservices architecture.
 
-## Architecture Overview
+## 🏗️ Architecture Overview
 
-This platform follows a microservices architecture with the following core services:
+### Modern Services Architecture
+- **API Gateway** (Port 8000): Central entry point with routing and rate limiting
+- **Authentication Service** (Port 8001): JWT/OAuth authentication with Google & Apple
+- **Payment Service** (Port 8002): Multi-gateway payment processing (Stripe, PayPal)
+- **Taxi Service** (Port 8003): Unified ride booking and driver management
+- **Notification Service** (Port 8004): Multi-channel notifications (email, SMS, push)
+- **Search Service** (Port 8005): Elasticsearch-powered search and recommendations
+- **File Service** (Port 8006): Cloud storage and media processing
+- **Analytics Service** (Port 8007): Business intelligence and reporting
+- **Admin Service** (Port 8008): Administrative dashboard and management
 
-- **API Gateway**: Central entry point for all client requests
-- **Authentication Service**: User authentication and authorization
-- **Payment Service**: Multi-gateway payment processing
-- **Notification Service**: Multi-channel notifications (email, SMS, push)
-- **Search Service**: Elasticsearch-powered search and recommendations
-- **File Service**: Media upload and management
-- **Analytics Service**: Business intelligence and reporting
+### Legacy Services (Being Migrated)
+- **E-commerce Backend** (Port 4000): Product catalog, orders, vendor management
+- **Hotel Service** (Port 4001): Property booking and management
+- **Advertisement Service** (Port 4003): Ad campaigns and analytics
 
-## Project Structure
+### Infrastructure
+- **PostgreSQL**: Primary database for all services
+- **Redis**: Caching and session storage
+- **RabbitMQ**: Message queue for inter-service communication
+- **Elasticsearch**: Search engine and analytics
+- **Prometheus + Grafana**: Monitoring and observability
+
+## 📁 Project Structure
 
 ```
 ├── packages/
-│   └── common/                 # Shared utilities and types
-├── services/
-│   ├── api-gateway/           # API Gateway service
-│   ├── authentication-service/ # Authentication service
-│   ├── payment-service/       # Payment processing service
-│   ├── notification-service/  # Notification service
-│   ├── search-service/        # Search and recommendations
-│   ├── file-service/          # File and media management
-│   └── analytics-service/     # Analytics and BI
-├── docker-compose.dev.yml     # Development environment
-├── docker-compose.prod.yml    # Production environment
-└── migrations/                # Database migrations
+│   └── common/                    # Shared utilities, types, and middleware
+├── services/                      # Modern microservices
+│   ├── api-gateway/              # Central routing and authentication
+│   ├── authentication-service/   # User auth with OAuth support
+│   ├── payment-service/          # Multi-gateway payment processing
+│   ├── taxi-service/             # Unified taxi and driver management
+│   ├── notification-service/     # Multi-channel notifications
+│   ├── search-service/           # Elasticsearch-based search
+│   ├── file-service/             # Cloud storage and media
+│   ├── analytics-service/        # Business intelligence
+│   └── admin-service/            # Administrative dashboard
+├── ecommerce-backend/            # Legacy e-commerce (being migrated)
+├── hotel-service/                # Legacy hotel service (being migrated)
+├── advertisement-service/        # Legacy ads service (being migrated)
+├── giga_taxi_main/              # Legacy taxi service (consolidated)
+├── giga_taxi_driver/            # Legacy driver service (consolidated)
+├── docs/                         # Documentation
+│   ├── architecture/            # Architecture documentation
+│   ├── development/             # Development guides
+│   ├── deployment/              # Deployment and CI/CD
+│   └── migration/               # Migration documentation
+├── scripts/                      # Utility and deployment scripts
+├── k8s/                         # Kubernetes deployment configs
+├── docker-compose.dev.yml       # Development environment
+├── docker-compose.essential.yml # Essential services only
+└── docker-compose.legacy.yml    # Legacy services (reference)
 ```
 
 ## Prerequisites
@@ -42,52 +69,61 @@ This platform follows a microservices architecture with the following core servi
 - RabbitMQ 3+
 - Elasticsearch 8+
 
-## Quick Start
+## 🚀 Quick Start
 
-### 1. Clone and Setup
+### Option 1: Full Development Environment (Recommended)
 
 ```bash
-# Clone the repository
+# 1. Clone and setup
 git clone <repository-url>
 cd giga-multi-service-platform
-
-# Install dependencies
 npm run setup
-```
 
-### 2. Environment Configuration
-
-```bash
-# Copy environment template
+# 2. Configure environment
 cp .env.example .env
-
 # Edit .env with your configuration
-nano .env
+
+# 3. Start all services
+docker-compose -f docker-compose.dev.yml up -d
+
+# 4. Verify services are running
+npm run health:check
 ```
 
-### 3. Development with Docker
+### Option 2: Essential Services Only
 
 ```bash
-# Start all services with dependencies
-npm run docker:dev
-
-# Or start individual services
-npm run dev:gateway
-npm run dev:auth
-npm run dev:payment
+# Start only core services (faster startup)
+docker-compose -f docker-compose.essential.yml up -d
 ```
 
-### 4. Manual Development Setup
+### Option 3: Manual Development
 
 ```bash
-# Start infrastructure services
-docker-compose -f docker-compose.dev.yml up postgres redis rabbitmq elasticsearch
+# Start infrastructure only
+docker-compose -f docker-compose.dev.yml up postgres redis rabbitmq elasticsearch -d
 
 # Build common package
 npm run build:common
 
-# Start services in development mode
-npm run dev
+# Start individual services
+npm run dev:auth
+npm run dev:payment
+npm run dev:gateway
+```
+
+### 🔍 Verify Installation
+
+```bash
+# Check service health
+curl http://localhost:8001/health  # Authentication
+curl http://localhost:8002/health  # Payment
+curl http://localhost:8000/health  # API Gateway
+
+# Access documentation
+open http://localhost:8001/docs    # Authentication API docs
+open http://localhost:15672        # RabbitMQ Management (guest/guest)
+open http://localhost:3000         # Grafana (admin/admin)
 ```
 
 ## Available Scripts
@@ -111,17 +147,30 @@ npm run dev
 - `npm run dev:file` - Start File Service
 - `npm run dev:analytics` - Start Analytics Service
 
-## Service Ports
+## 🌐 Service Ports & URLs
 
-| Service | Port | Description |
-|---------|------|-------------|
-| API Gateway | 8000 | Main entry point |
-| Authentication | 8001 | User auth and authorization |
-| Payment | 8002 | Payment processing |
-| Notification | 8003 | Multi-channel notifications |
-| Search | 8004 | Search and recommendations |
-| File | 8005 | File and media management |
-| Analytics | 8006 | Analytics and BI |
+### Modern Services
+| Service | Port | Health | Docs | Description |
+|---------|------|--------|------|-------------|
+| API Gateway | 8000 | `/health` | `/docs` | Central routing and rate limiting |
+| Authentication | 8001 | `/health` | `/docs` | JWT/OAuth authentication |
+| Payment | 8002 | `/health` | `/docs` | Multi-gateway payment processing |
+| Taxi | 8003 | `/health` | `/docs` | Unified ride and driver management |
+| Notification | 8004 | `/health` | `/docs` | Email, SMS, push notifications |
+| Search | 8005 | `/health` | `/docs` | Elasticsearch-based search |
+| File | 8006 | `/health` | `/docs` | Cloud storage and media |
+| Analytics | 8007 | `/health` | `/docs` | Business intelligence |
+| Admin | 8008 | `/health` | `/docs` | Administrative dashboard |
+
+### Legacy Services (Being Migrated)
+| Service | Port | Status | Migration Target |
+|---------|------|--------|------------------|
+| E-commerce | 4000 | 🔄 Active | → New E-commerce Service |
+| Hotel | 4001 | 🔄 Active | → New Hotel Service |
+| Advertisement | 4003 | 🔄 Active | → New Advertisement Service |
+| Giga Main | - | ✅ Migrated | → Authentication Service |
+| Taxi Main/Driver | - | ✅ Migrated | → Taxi Service |
+| Payment (Legacy) | - | ✅ Migrated | → Payment Service |
 
 ## Infrastructure Services
 

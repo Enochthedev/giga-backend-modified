@@ -1,0 +1,148 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - backend-network
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - backend-network
+  mongo:
+    image: mongo
+    container_name: mongo
+    restart: always
+    ports:
+      - "27017:27017"
+    networks:
+      - backend-network
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  giga-main:
+    build:
+      context: .
+      dockerfile: giga_main/Dockerfile
+    container_name: giga-main
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - rabbitmq
+      - mongo
+      - redis
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      RABBITMQ_URL: amqp://rabbitmq
+      MONGODB_URL: mongodb://mongo:27017/giga
+      JWT_SECRET: example_jwt_secret
+      REFRESH_SECRET: example_refresh_secret
+      REDIS_URL: redis://redis:6379
+    networks:
+      - backend-network
+  ecommerce-service:
+    build:
+      context: .
+      dockerfile: services/ecommerce-service/Dockerfile
+    container_name: ecommerce-service
+    ports:
+      - "4000:4000"
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      RABBITMQ_URL: amqp://rabbitmq
+      JWT_SECRET: example_jwt_secret
+      REFRESH_SECRET: example_refresh_secret
+      REDIS_URL: redis://redis:6379
+    networks:
+      - backend-network
+  hotel-service:
+    build:
+      context: .
+      dockerfile: services/hotel-service/Dockerfile
+    container_name: hotel-service
+    ports:
+      - "4001:4001"
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      RABBITMQ_URL: amqp://rabbitmq
+      JWT_SECRET: example_jwt_secret
+      REFRESH_SECRET: example_refresh_secret
+      REDIS_URL: redis://redis:6379
+    networks:
+      - backend-network
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: payment-service
+    ports:
+      - "4002:4002"
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      RABBITMQ_URL: amqp://rabbitmq
+      JWT_SECRET: example_jwt_secret
+      REFRESH_SECRET: example_refresh_secret
+      REDIS_URL: redis://redis:6379
+    networks:
+      - backend-network
+  advertisement-service:
+    build:
+      context: .
+      dockerfile: services/advertisement-service/Dockerfile
+    container_name: advertisement-service
+    ports:
+      - "4003:4003"
+    depends_on:
+      - postgres
+      - rabbitmq
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres
+      RABBITMQ_URL: amqp://rabbitmq
+      JWT_SECRET: example_jwt_secret
+      REFRESH_SECRET: example_refresh_secret
+      REDIS_URL: redis://redis:6379
+    networks:
+      - backend-network
+  nginx:
+    image: nginx:latest
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    depends_on:
+      - giga-main
+networks:
+  backend-network:
+    driver: bridge

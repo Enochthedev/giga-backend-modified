@@ -1,15 +1,78 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { UserModel } from '../models/user-model';
+import { AuthService } from '../services/auth-service';
 import { ApiResponseUtil, ValidationMiddleware } from '@giga/common';
 import { userValidationSchemas } from '../validation/user-validation';
+import { authMiddleware, requirePermission } from '../middleware/auth-middleware';
+import { validateRequest, validateParams } from '../middleware/validation-middleware';
+import { authValidation } from '../validation/auth-validation';
+import Joi from 'joi';
 
 const router = Router();
 
+// Enhanced validation schemas
+const userValidation = {
+    getUserById: Joi.object({
+        id: Joi.string().uuid().required()
+    }),
+    updateProfile: authValidation.updateProfile,
+    addRating: authValidation.addRating,
+    createTaxiAccount: authValidation.createTaxiAccount
+};
+
+/**
+ * GET /api/users/me
+ * Get current user profile
+ */
+router.get('/me', authMiddleware, async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = (req as any).user.userId;
+        const userProfile = await AuthService.getUserProfile(userId);
+
+        res.json(
+            ApiResponseUtil.success(
+                userProfile,
+                'User profile retrieved successfully',
+                req.headers['x-request-id'] as string
+            )
+        );
+        return;
+    } catch (error) {
+        next(error);
+        return;
+    }
+});
+
+/**
+ * PUT /api/users/me
+ * Update current user profile
+ */
+router.put('/me', authMiddleware, validateRequest(userValidation.updateProfile), async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const userId = (req as any).user.userId;
+        const result = await AuthService.updateProfile(userId, req.body);
+
+        res.json(
+            ApiResponseUtil.success(
+                result.user,
+                result.message,
+                req.headers['x-request-id'] as string
+            )
+        );
+        return;
+    } catch (error) {
+        next(error);
+        return;
+    }
+});
+
 /**
  * GET /api/users/:id
- * Get user by ID
+ * Get user by ID (admin only)
  */
 router.get('/:id',
+    authMiddleware,
+    requirePermission('users.read'),
     ValidationMiddleware.validateUuidParams('id'),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -50,9 +113,11 @@ router.get('/:id',
 
 /**
  * GET /api/users/:id/profile
- * Get user profile with roles and permissions
+ * Get user profile with roles and permissions (admin only)
  */
 router.get('/:id/profile',
+    authMiddleware,
+    requirePermission('users.read'),
     ValidationMiddleware.validateUuidParams('id'),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -98,9 +163,11 @@ router.get('/:id/profile',
 
 /**
  * PUT /api/users/:id
- * Update user information
+ * Update user information (admin only)
  */
 router.put('/:id',
+    authMiddleware,
+    requirePermission('users.write'),
     ValidationMiddleware.validateUuidParams('id'),
     ValidationMiddleware.validateZod(userValidationSchemas.updateUser),
     async (req: Request, res: Response, next: NextFunction) => {
@@ -131,9 +198,11 @@ router.put('/:id',
 
 /**
  * DELETE /api/users/:id
- * Deactivate user (soft delete)
+ * Deactivate user (soft delete) (admin only)
  */
 router.delete('/:id',
+    authMiddleware,
+    requirePermission('users.delete'),
     ValidationMiddleware.validateUuidParams('id'),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -156,9 +225,11 @@ router.delete('/:id',
 
 /**
  * POST /api/users/:id/verify-email
- * Verify user email
+ * Verify user email (admin only)
  */
 router.post('/:id/verify-email',
+    authMiddleware,
+    requirePermission('users.write'),
     ValidationMiddleware.validateUuidParams('id'),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -180,10 +251,98 @@ router.post('/:id/verify-email',
 );
 
 /**
+ * POST /api/users/:id/rating
+ * Add rating to user
+ */
+router.post('/:id/rating',
+    authMiddleware,
+    ValidationMiddleware.validateUuidParams('id'),
+    validateRequest(userValidation.addRating),
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { id } = req.params;
+            const { rating } = req.body;
+            const raterId = (req as any).user.userId;
+
+            // Prevent users from rating themselves
+            if (id === raterId) {
+                return res.status(400).json(
+                    ApiResponseUtil.error(
+                        'You cannot rate yourself',
+                        'SELF_RATING_NOT_ALLOWED',
+                        req.headers['x-request-id'] as string
+                    )
+                );
+            }
+
+            const result = await AuthService.addRating(id!, rating);
+
+            res.json(
+                ApiResponseUtil.success(
+                    null,
+                    result.message,
+                    req.headers['x-request-id'] as string
+                )
+            );
+            return;
+        } catch (error) {
+            next(error);
+            return;
+        }
+    }
+);
+
+/**
+ * POST /api/users/:id/taxi-account
+ * Create taxi account association
+ */
+router.post('/:id/taxi-account',
+    authMiddleware,
+    ValidationMiddleware.validateUuidParams('id'),
+    validateRequest(userValidation.createTaxiAccount),
+    async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { id } = req.params;
+            const currentUserId = (req as any).user.userId;
+
+            // Users can only create taxi accounts for themselves, unless they're admin
+            const userRoles = (req as any).user.roles || [];
+            const isAdmin = userRoles.includes('admin') || userRoles.includes('super_admin');
+
+            if (id !== currentUserId && !isAdmin) {
+                return res.status(403).json(
+                    ApiResponseUtil.error(
+                        'You can only create taxi accounts for yourself',
+                        'FORBIDDEN',
+                        req.headers['x-request-id'] as string
+                    )
+                );
+            }
+
+            const result = await AuthService.createTaxiAccount(id!, req.body);
+
+            res.json(
+                ApiResponseUtil.success(
+                    null,
+                    result.message,
+                    req.headers['x-request-id'] as string
+                )
+            );
+            return;
+        } catch (error) {
+            next(error);
+            return;
+        }
+    }
+);
+
+/**
  * POST /api/users/:id/roles/:roleName
- * Assign role to user
+ * Assign role to user (admin only)
  */
 router.post('/:id/roles/:roleName',
+    authMiddleware,
+    requirePermission('roles.write'),
     ValidationMiddleware.validateUuidParams('id'),
     async (req: Request, res: Response, next: NextFunction) => {
         try {
@@ -220,9 +379,11 @@ router.post('/:id/roles/:roleName',
 
 /**
  * DELETE /api/users/:id/roles/:roleName
- * Remove role from user
+ * Remove role from user (admin only)
  */
 router.delete('/:id/roles/:roleName',
+    authMiddleware,
+    requirePermission('roles.write'),
     ValidationMiddleware.validateUuidParams('id'),
     async (req: Request, res: Response, next: NextFunction) => {
         try {

@@ -6,6 +6,7 @@ import httpStatus from 'http-status';
 import rideConfig from '../config/ride-config';
 import pricingService from './pricing.service';
 import routeOptimizationService from './route-optimization.service';
+import logger from '../utils/logger';
 
 export interface RideRequestData {
     customerId: string;
@@ -97,6 +98,171 @@ class RideService {
         return {
             ride: savedRide,
             availableDrivers
+        };
+    }
+
+    /**
+     * Request a ride with immediate driver assignment (legacy compatibility)
+     * This bypasses the acceptance flow and assigns a driver immediately
+     */
+    async requestRideWithDriver(
+        requestData: RideRequestData & {
+            driverId: string;
+            driverUserId: string;
+        }
+    ): Promise<IRide> {
+        // Check if customer exists
+        const customer = await Customer.findOne({ userId: requestData.customerId });
+        if (!customer) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Customer not found');
+        }
+
+        // Check if customer already has an active ride
+        const existingRide = await Ride.findActiveRideForCustomer(requestData.customerId);
+        if (existingRide) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Customer already has an active ride');
+        }
+
+        // Check if driver exists and is available
+        const driver = await Driver.findById(requestData.driverId);
+        if (!driver) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Driver not found');
+        }
+
+        if (!driver.canAcceptRide()) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Driver is not available to accept rides');
+        }
+
+        // Calculate ride estimate
+        const estimate = await this.calculateRideEstimate(
+            requestData.pickupLocation,
+            requestData.dropoffLocation,
+            requestData.vehicleType || VehicleType.REGULAR
+        );
+
+        // Create ride with driver already assigned
+        const ride = new Ride({
+            customerId: requestData.customerId,
+            driverId: requestData.driverId,
+            status: RideStatus.ACCEPTED, // Directly accepted
+            vehicleType: requestData.vehicleType || VehicleType.REGULAR,
+            pickupLocation: {
+                type: 'Point',
+                coordinates: [requestData.pickupLocation.longitude, requestData.pickupLocation.latitude],
+                address: requestData.pickupLocation.address
+            },
+            dropoffLocation: {
+                type: 'Point',
+                coordinates: [requestData.dropoffLocation.longitude, requestData.dropoffLocation.latitude],
+                address: requestData.dropoffLocation.address
+            },
+            estimatedFare: estimate.fare,
+            estimatedDistance: estimate.distance,
+            estimatedDuration: estimate.duration,
+            customerNotes: requestData.customerNotes,
+            acceptedAt: new Date() // Set acceptance time immediately
+        });
+
+        const savedRide = await ride.save();
+
+        // Update customer's current ride
+        customer.currentRide = savedRide._id as any;
+        await customer.save();
+
+        // Update driver status
+        driver.status = DriverStatus.BUSY;
+        driver.currentRide = savedRide._id;
+        await driver.save();
+
+        // Send event for legacy compatibility
+        try {
+            const eventService = (await import('./event.service')).default;
+            await eventService.sendDriverAcceptRide(savedRide);
+        } catch (error) {
+            logger.warn('Failed to send driver accept ride event', { error });
+        }
+
+        return savedRide;
+    }
+
+    /**
+     * Create ride offer for driver (legacy compatibility)
+     */
+    async createRideOffer(rideData: {
+        driverId: string;
+        driverUserId: string;
+        customerId: string;
+        customerUserId: string;
+        rideType: string;
+        status: string;
+        pickupLocation: { lat: number; lon: number };
+        dropOffLocation: { lat: number; lon: number };
+    }): Promise<{
+        distance: number;
+        arrivalEta: number;
+        rideEta: number;
+    }> {
+        // Check if driver exists
+        const driver = await Driver.findById(rideData.driverId);
+        if (!driver) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Driver not found');
+        }
+
+        // Calculate distances and ETAs
+        const pickupCoords = [rideData.pickupLocation.lon, rideData.pickupLocation.lat];
+        const dropoffCoords = [rideData.dropOffLocation.lon, rideData.dropOffLocation.lat];
+        
+        // Calculate driver to pickup distance
+        const driverToPickupDistance = this.calculateDistance(
+            driver.location.coordinates[1],
+            driver.location.coordinates[0],
+            rideData.pickupLocation.lat,
+            rideData.pickupLocation.lon
+        );
+
+        // Calculate pickup to dropoff distance
+        const pickupToDropoffDistance = this.calculateDistance(
+            rideData.pickupLocation.lat,
+            rideData.pickupLocation.lon,
+            rideData.dropOffLocation.lat,
+            rideData.dropOffLocation.lon
+        );
+
+        // Calculate ETAs
+        const arrivalEta = this.calculateETA(driverToPickupDistance);
+        const rideEta = this.calculateETA(pickupToDropoffDistance);
+
+        // Create ride record
+        const ride = new Ride({
+            customerId: rideData.customerId,
+            driverId: rideData.driverId,
+            status: RideStatus.REQUESTED,
+            vehicleType: rideData.rideType as VehicleType,
+            pickupLocation: {
+                type: 'Point',
+                coordinates: pickupCoords,
+                address: undefined
+            },
+            dropoffLocation: {
+                type: 'Point',
+                coordinates: dropoffCoords,
+                address: undefined
+            },
+            estimatedDistance: Math.round(pickupToDropoffDistance * 1000), // Convert to meters
+            estimatedDuration: rideEta,
+            driverArrivalTime: arrivalEta
+        });
+
+        await ride.save();
+
+        // Add to driver's ride offers
+        driver.rideOffers.push(ride._id);
+        await driver.save();
+
+        return {
+            distance: Math.round(pickupToDropoffDistance * 1000), // Convert to meters
+            arrivalEta,
+            rideEta
         };
     }
 
