@@ -1,134 +1,159 @@
 # Authentication Service
 
-The authentication service handles user registration, login, JWT token management, and role-based access control for the Giga platform.
+A microservice responsible for user authentication, authorization, and user management in the Giga platform.
 
 ## Features
 
 - User registration and login
-- JWT access token and refresh token management
-- Password hashing with bcrypt
+- JWT token-based authentication
+- OAuth integration (Google, Apple, Facebook, GitHub)
 - Role-based access control (RBAC)
-- Email verification
-- Password reset functionality
-- Multi-device session management
-- OAuth integration support (Google, Facebook)
-- Comprehensive input validation
-- Rate limiting and security middleware
+- Two-factor authentication (2FA)
+- Password reset and account recovery
+- User profile management
+- Session management
+- Rate limiting and security
 
-## API Endpoints
+## Prerequisites
 
-### Authentication
+- Node.js 18+ 
+- PostgreSQL 12+
+- Redis (optional, for session storage)
+- npm or yarn
 
-- `POST /api/auth/register` - Register a new user
-- `POST /api/auth/login` - Login with email and password
-- `POST /api/auth/refresh` - Refresh access token
-- `POST /api/auth/logout` - Logout (revoke refresh token)
-- `POST /api/auth/logout-all` - Logout from all devices
-- `POST /api/auth/change-password` - Change user password
-- `POST /api/auth/verify-token` - Verify JWT token
+## Local Development Setup
 
-### User Management
-
-- `GET /api/users/:id` - Get user by ID
-- `GET /api/users/:id/profile` - Get user profile with roles
-- `PUT /api/users/:id` - Update user information
-- `DELETE /api/users/:id` - Deactivate user (soft delete)
-- `POST /api/users/:id/verify-email` - Verify user email
-- `POST /api/users/:id/roles/:roleName` - Assign role to user
-- `DELETE /api/users/:id/roles/:roleName` - Remove role from user
-
-## Environment Variables
+### 1. Install Dependencies
 
 ```bash
+cd services/authentication-service
+pnpm install
+```
+
+### 2. Environment Configuration
+
+Create a `.env` file in the service directory:
+
+```bash
+# Database Configuration
+DATABASE_URL=postgresql://postgres:password@localhost:5432/auth_db
+
 # Service Configuration
-NODE_ENV=development
 PORT=8001
-SERVICE_NAME=authentication-service
-
-# Database
-DATABASE_URL=postgresql://username:password@localhost:5432/database
-
-# Redis (for caching and sessions)
-REDIS_URL=redis://localhost:6379
-
-# Message Queue
-RABBITMQ_URL=amqp://username:password@localhost:5672
+NODE_ENV=development
 
 # JWT Configuration
 JWT_SECRET=your-super-secret-jwt-key-here
 JWT_EXPIRES_IN=24h
 JWT_REFRESH_EXPIRES_IN=7d
 
-# Security
-BCRYPT_ROUNDS=12
-
-# OAuth Providers
+# OAuth Configuration (optional)
 GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
-FACEBOOK_APP_ID=your-facebook-app-id
-FACEBOOK_APP_SECRET=your-facebook-app-secret
+APPLE_CLIENT_ID=your-apple-client-id
+APPLE_CLIENT_SECRET=your-apple-client-secret
+FACEBOOK_CLIENT_ID=your-facebook-client-id
+FACEBOOK_CLIENT_SECRET=your-facebook-client-secret
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
 
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
+# Redis Configuration (optional)
+REDIS_URL=redis://localhost:6379
 
-# Logging
-LOG_LEVEL=info
+# Email Configuration (optional)
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
 ```
 
-## Database Schema
+### 3. Database Setup
 
-The service uses PostgreSQL with the following main tables:
+Ensure PostgreSQL is running and create the database:
 
-- `users` - User account information
-- `roles` - Available roles in the system
-- `permissions` - Available permissions
-- `user_roles` - User-role assignments
-- `role_permissions` - Role-permission assignments
-- `refresh_tokens` - JWT refresh tokens
-- `password_reset_tokens` - Password reset tokens
-- `email_verification_tokens` - Email verification tokens
-- `oauth_providers` - OAuth provider connections
-- `user_sessions` - Active user sessions
+```sql
+CREATE DATABASE auth_db;
+```
 
-## Getting Started
+Run migrations:
 
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL 14+
-- Redis 6+
-- RabbitMQ 3.8+
-
-### Installation
-
-1. Install dependencies:
 ```bash
-npm install
+pnpm run migrate
 ```
 
-2. Set up environment variables:
+### 4. Start the Service
+
 ```bash
-cp .env.example .env
-# Edit .env with your configuration
+# Development mode with auto-reload
+pnpm run dev
+
+# Production mode
+pnpm run build
+pnpm start
 ```
 
-3. Run database migrations:
+The service will be available at `http://localhost:8001`
+
+### 5. Health Check
+
 ```bash
-npm run migrate
+curl http://localhost:8001/health
 ```
 
-4. Start the service:
+## API Endpoints
+
+### Authentication
+- `POST /auth/register` - User registration
+- `POST /auth/login` - User login
+- `POST /auth/logout` - User logout
+- `POST /auth/refresh` - Refresh JWT token
+- `POST /auth/forgot-password` - Request password reset
+- `POST /auth/reset-password` - Reset password
+
+### OAuth
+- `GET /auth/google` - Google OAuth
+- `GET /auth/apple` - Apple OAuth
+- `GET /auth/facebook` - Facebook OAuth
+- `GET /auth/github` - GitHub OAuth
+
+### User Management
+- `GET /users/profile` - Get user profile
+- `PUT /users/profile` - Update user profile
+- `GET /users/:id` - Get user by ID
+- `DELETE /users/:id` - Delete user
+
+### 2FA
+- `POST /2fa/enable` - Enable 2FA
+- `POST /2fa/verify` - Verify 2FA code
+- `POST /2fa/disable` - Disable 2FA
+
+## Docker Setup
+
+### Using Docker Compose (Recommended)
+
+The service is included in the main `docker-compose.dev.yml`:
+
 ```bash
-# Development
-npm run dev
-
-# Production
-npm run build
-npm start
+# From project root
+docker-compose -f docker-compose.dev.yml up authentication-service
 ```
 
-### Running Tests
+### Standalone Docker
+
+```bash
+# Build the image
+docker build -t giga-auth-service .
+
+# Run the container
+docker run -d \
+  --name auth-service \
+  -p 8001:8001 \
+  -e DATABASE_URL=postgresql://postgres:password@host.docker.internal:5432/auth_db \
+  -e JWT_SECRET=your-secret \
+  giga-auth-service
+```
+
+## Testing
 
 ```bash
 # Run all tests
@@ -141,165 +166,50 @@ npm run test:watch
 npm run test:coverage
 ```
 
-### Database Migrations
+## Monitoring
+
+The service exposes metrics at `/metrics` for Prometheus monitoring and includes OpenTelemetry tracing.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Error**
+   - Ensure PostgreSQL is running
+   - Check DATABASE_URL format
+   - Verify database exists
+
+2. **Port Already in Use**
+   - Change PORT in .env file
+   - Kill process using the port: `lsof -ti:8001 | xargs kill`
+
+3. **JWT Errors**
+   - Ensure JWT_SECRET is set
+   - Check token expiration settings
+
+4. **OAuth Errors**
+   - Verify OAuth credentials
+   - Check redirect URIs in OAuth provider settings
+
+### Logs
+
+Check service logs for detailed error information:
 
 ```bash
-# Run pending migrations
-npm run migrate
+# If running locally
+npm run dev
 
-# Check migration status
-npm run migrate:status
-
-# Rollback last migration
-npm run migrate:rollback
+# If running in Docker
+docker logs auth-service
 ```
 
-## Security Features
+## Contributing
 
-### Password Security
-- Passwords are hashed using bcrypt with configurable rounds
-- Password strength validation (minimum 8 characters, uppercase, lowercase, number, special character)
-- Password change requires current password verification
-
-### JWT Security
-- Access tokens with short expiration (default 24h)
-- Refresh tokens with longer expiration (default 7d)
-- Refresh token rotation on use
-- Token revocation support
-
-### Rate Limiting
-- Configurable rate limiting per IP address
-- Different limits for different endpoints
-- Automatic blocking of suspicious activity
-
-### Input Validation
-- Comprehensive input validation using Zod schemas
-- SQL injection prevention
-- XSS protection
-- CSRF protection
-
-## Role-Based Access Control
-
-The service supports a flexible RBAC system:
-
-### Default Roles
-- `super_admin` - Full system access
-- `admin` - Administrative access
-- `user` - Regular user access
-- `vendor` - Vendor-specific access
-- `driver` - Driver-specific access
-- `property_owner` - Property management access
-
-### Permissions
-Permissions are granular and follow the pattern `resource.action`:
-- `users.read`, `users.write`, `users.delete`
-- `roles.read`, `roles.write`, `roles.delete`
-- `system.admin`
-
-## API Usage Examples
-
-### Register a new user
-```bash
-curl -X POST http://localhost:8001/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "SecurePass123!",
-    "firstName": "John",
-    "lastName": "Doe"
-  }'
-```
-
-### Login
-```bash
-curl -X POST http://localhost:8001/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "SecurePass123!"
-  }'
-```
-
-### Refresh token
-```bash
-curl -X POST http://localhost:8001/api/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refreshToken": "your-refresh-token-here"
-  }'
-```
-
-## Error Handling
-
-The service returns consistent error responses:
-
-```json
-{
-  "success": false,
-  "message": "Error description",
-  "error": "ERROR_CODE",
-  "timestamp": "2023-01-01T00:00:00.000Z",
-  "requestId": "uuid"
-}
-```
-
-Common error codes:
-- `VALIDATION_ERROR` - Input validation failed
-- `UNAUTHORIZED` - Authentication required or failed
-- `FORBIDDEN` - Insufficient permissions
-- `NOT_FOUND` - Resource not found
-- `CONFLICT` - Resource already exists
-- `RATE_LIMIT_EXCEEDED` - Too many requests
-
-## Monitoring and Logging
-
-The service includes comprehensive logging and monitoring:
-
-- Structured JSON logging
-- Request/response logging
-- Performance monitoring
-- Security event logging
-- Health check endpoint at `/health`
-
-## Development
-
-### Code Structure
-```
-src/
-├── app.ts                 # Main application entry point
-├── database/
-│   ├── connection.ts      # Database connection management
-│   ├── migrate.ts         # Migration runner
-│   └── migrations/        # SQL migration files
-├── models/
-│   ├── user-model.ts      # User data access layer
-│   └── refresh-token-model.ts
-├── services/
-│   └── auth-service.ts    # Authentication business logic
-├── routes/
-│   ├── auth-routes.ts     # Authentication endpoints
-│   └── user-routes.ts     # User management endpoints
-├── validation/
-│   ├── auth-validation.ts # Authentication input validation
-│   └── user-validation.ts # User input validation
-└── tests/
-    ├── setup.ts           # Test configuration
-    └── auth-service.test.ts
-```
-
-### Contributing
-
-1. Follow the existing code style and patterns
-2. Add tests for new functionality
+1. Follow the project's coding standards
+2. Write tests for new features
 3. Update documentation as needed
-4. Ensure all tests pass before submitting
+4. Submit pull requests for review
 
-### Linting
+## License
 
-```bash
-# Check for linting errors
-npm run lint
-
-# Fix linting errors automatically
-npm run lint:fix
-```
+MIT License - see LICENSE file for details

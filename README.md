@@ -1,340 +1,411 @@
 # Giga Multi-Service Platform
 
-A comprehensive microservices platform supporting ecommerce, taxi services, hotel booking, payments, and advertising functionality. This platform has been modernized from legacy services into a scalable, maintainable microservices architecture.
-
-## 🏗️ Architecture Overview
-
-### Modern Services Architecture
-- **API Gateway** (Port 8000): Central entry point with routing and rate limiting
-- **Authentication Service** (Port 8001): JWT/OAuth authentication with Google & Apple
-- **Payment Service** (Port 8002): Multi-gateway payment processing (Stripe, PayPal)
-- **Taxi Service** (Port 8003): Unified ride booking and driver management
-- **Notification Service** (Port 8004): Multi-channel notifications (email, SMS, push)
-- **Search Service** (Port 8005): Elasticsearch-powered search and recommendations
-- **File Service** (Port 8006): Cloud storage and media processing
-- **Analytics Service** (Port 8007): Business intelligence and reporting
-- **Admin Service** (Port 8008): Administrative dashboard and management
-
-### Legacy Services (Being Migrated)
-- **E-commerce Backend** (Port 4000): Product catalog, orders, vendor management
-- **Hotel Service** (Port 4001): Property booking and management
-- **Advertisement Service** (Port 4003): Ad campaigns and analytics
-
-### Infrastructure
-- **PostgreSQL**: Primary database for all services
-- **Redis**: Caching and session storage
-- **RabbitMQ**: Message queue for inter-service communication
-- **Elasticsearch**: Search engine and analytics
-- **Prometheus + Grafana**: Monitoring and observability
-
-## 📁 Project Structure
-
-```
-├── packages/
-│   └── common/                    # Shared utilities, types, and middleware
-├── services/                      # Modern microservices
-│   ├── api-gateway/              # Central routing and authentication
-│   ├── authentication-service/   # User auth with OAuth support
-│   ├── payment-service/          # Multi-gateway payment processing
-│   ├── taxi-service/             # Unified taxi and driver management
-│   ├── notification-service/     # Multi-channel notifications
-│   ├── search-service/           # Elasticsearch-based search
-│   ├── file-service/             # Cloud storage and media
-│   ├── analytics-service/        # Business intelligence
-│   └── admin-service/            # Administrative dashboard
-├── ecommerce-backend/            # Legacy e-commerce (being migrated)
-├── hotel-service/                # Legacy hotel service (being migrated)
-├── advertisement-service/        # Legacy ads service (being migrated)
-├── giga_taxi_main/              # Legacy taxi service (consolidated)
-├── giga_taxi_driver/            # Legacy driver service (consolidated)
-├── docs/                         # Documentation
-│   ├── architecture/            # Architecture documentation
-│   ├── development/             # Development guides
-│   ├── deployment/              # Deployment and CI/CD
-│   └── migration/               # Migration documentation
-├── scripts/                      # Utility and deployment scripts
-├── k8s/                         # Kubernetes deployment configs
-├── docker-compose.dev.yml       # Development environment
-├── docker-compose.essential.yml # Essential services only
-└── docker-compose.legacy.yml    # Legacy services (reference)
-```
-
-## Prerequisites
-
-- Node.js >= 18.0.0
-- npm >= 9.0.0
-- Docker and Docker Compose
-- PostgreSQL 15+
-- Redis 7+
-- RabbitMQ 3+
-- Elasticsearch 8+
+A comprehensive microservices platform built with Node.js, TypeScript, and modern cloud-native technologies. The platform provides e-commerce, hotel booking, taxi services, payment processing, and more through a scalable microservices architecture.
 
 ## 🚀 Quick Start
 
 ### Option 1: Full Development Environment (Recommended)
 
 ```bash
-# 1. Clone and setup
+# Clone the repository
 git clone <repository-url>
-cd giga-multi-service-platform
-npm run setup
+cd giga-backend-modified
 
-# 2. Configure environment
-cp .env.example .env
-# Edit .env with your configuration
+# Install dependencies
+npm install
 
-# 3. Start all services
+# Start all services with Docker
+npm run docker:dev
+
+# Or manually:
 docker-compose -f docker-compose.dev.yml up -d
-
-# 4. Verify services are running
-npm run health:check
 ```
 
 ### Option 2: Essential Services Only
 
+For development with minimal resource usage:
+
 ```bash
-# Start only core services (faster startup)
+# Start core infrastructure and essential services
+./start-essential-platform.sh
+
+# Or manually:
 docker-compose -f docker-compose.essential.yml up -d
 ```
 
-### Option 3: Manual Development
+### Option 3: Local Development
+
+Run services locally without Docker:
 
 ```bash
-# Start infrastructure only
-docker-compose -f docker-compose.dev.yml up postgres redis rabbitmq elasticsearch -d
+# Install dependencies
+pnpm install
 
 # Build common package
-npm run build:common
+pnpm run build:common
 
 # Start individual services
-npm run dev:auth
-npm run dev:payment
-npm run dev:gateway
+pnpm run dev:auth      # Authentication service on port 8001
+pnpm run dev:admin     # Admin service on port 3006
+pnpm run dev:gateway   # API Gateway on port 3000
 ```
 
-### 🔍 Verify Installation
+## 📋 Prerequisites
 
-```bash
-# Check service health
-curl http://localhost:8001/health  # Authentication
-curl http://localhost:8002/health  # Payment
-curl http://localhost:8000/health  # API Gateway
+- **Docker**: Docker Desktop 20.10+ or Docker Engine 20.10+
+- **Node.js**: 18+ 
+- **PostgreSQL**: 12+ (or use Docker)
+- **Redis**: 6+ (or use Docker)
+- **pnpm**: 8+ or yarn
 
-# Access documentation
-open http://localhost:8001/docs    # Authentication API docs
-open http://localhost:15672        # RabbitMQ Management (guest/guest)
-open http://localhost:3000         # Grafana (admin/admin)
-```
+## 🏗️ Architecture
 
-## Available Scripts
+The platform consists of 13 microservices:
 
-### Root Level Commands
+### Core Services
+- **API Gateway** (Port 3000) - Main entry point and routing
+- **Authentication Service** (Port 8001) - User auth & management
+- **Admin Service** (Port 3006) - Administrative functions
 
-- `npm run setup` - Install dependencies and build common package
-- `npm run build` - Build all packages and services
-- `npm run dev` - Start all services in development mode
-- `npm run test` - Run tests across all services
-- `npm run lint` - Lint all code
-- `npm run docker:dev` - Start development environment with Docker
+### Business Services
+- **E-commerce Service** (Port 8002) - Product & order management
+- **Hotel Service** (Port 8003) - Hotel booking & management
+- **Taxi Service** (Port 8004) - Ride booking & management
+- **Payment Service** (Port 8005) - Payment processing
+- **Advertisement Service** (Port 8010) - Ad management
 
-### Service-Specific Commands
+### Support Services
+- **Notification Service** (Port 8006) - Push notifications
+- **Search Service** (Port 8007) - Search functionality
+- **File Service** (Port 8008) - File upload/download
+- **Analytics Service** (Port 8009) - Data analytics
+- **Messaging Service** (Port 8011) - Chat & messaging
 
-- `npm run dev:gateway` - Start API Gateway
-- `npm run dev:auth` - Start Authentication Service
-- `npm run dev:payment` - Start Payment Service
-- `npm run dev:notification` - Start Notification Service
-- `npm run dev:search` - Start Search Service
-- `npm run dev:file` - Start File Service
-- `npm run dev:analytics` - Start Analytics Service
+### Infrastructure
+- **PostgreSQL** (Port 5432) - Primary database
+- **Redis** (Port 6379) - Cache & sessions
+- **RabbitMQ** (Port 5672) - Message queue
+- **Elasticsearch** (Port 9200) - Search engine
 
-## 🌐 Service Ports & URLs
+## 🐳 Docker Setup
 
-### Modern Services
-| Service | Port | Health | Docs | Description |
-|---------|------|--------|------|-------------|
-| API Gateway | 8000 | `/health` | `/docs` | Central routing and rate limiting |
-| Authentication | 8001 | `/health` | `/docs` | JWT/OAuth authentication |
-| Payment | 8002 | `/health` | `/docs` | Multi-gateway payment processing |
-| Taxi | 8003 | `/health` | `/docs` | Unified ride and driver management |
-| Notification | 8004 | `/health` | `/docs` | Email, SMS, push notifications |
-| Search | 8005 | `/health` | `/docs` | Elasticsearch-based search |
-| File | 8006 | `/health` | `/docs` | Cloud storage and media |
-| Analytics | 8007 | `/health` | `/docs` | Business intelligence |
-| Admin | 8008 | `/health` | `/docs` | Administrative dashboard |
-
-### Legacy Services (Being Migrated)
-| Service | Port | Status | Migration Target |
-|---------|------|--------|------------------|
-| E-commerce | 4000 | 🔄 Active | → New E-commerce Service |
-| Hotel | 4001 | 🔄 Active | → New Hotel Service |
-| Advertisement | 4003 | 🔄 Active | → New Advertisement Service |
-| Giga Main | - | ✅ Migrated | → Authentication Service |
-| Taxi Main/Driver | - | ✅ Migrated | → Taxi Service |
-| Payment (Legacy) | - | ✅ Migrated | → Payment Service |
-
-## Infrastructure Services
-
-| Service | Port | UI/Management |
-|---------|------|---------------|
-| PostgreSQL | 5432 | - |
-| Redis | 6379 | - |
-| RabbitMQ | 5672 | Management UI: http://localhost:15672 |
-| Elasticsearch | 9200 | - |
-| Prometheus | 9090 | UI: http://localhost:9090 |
-| Grafana | 3000 | UI: http://localhost:3000 |
-
-## Development Workflow
-
-### 1. Adding a New Service
-
-```bash
-# Create service directory
-mkdir services/new-service
-
-# Copy package.json template
-cp services/authentication-service/package.json services/new-service/
-# Edit package.json with new service details
-
-# Create TypeScript config
-cp services/authentication-service/tsconfig.json services/new-service/
-
-# Create Dockerfile
-cp services/authentication-service/Dockerfile services/new-service/
-```
-
-### 2. Working with Common Package
-
-The `@giga/common` package contains shared utilities, types, and middleware:
-
-```typescript
-import { ApiError, ApiResponseUtil, Logger } from '@giga/common';
-
-// Use shared error handling
-throw ApiError.badRequest('Invalid input');
-
-// Use shared response utilities
-return ApiResponseUtil.success(data, 'Operation successful');
-
-// Use shared logging
-Logger.info('Service started', { port: 8001 });
-```
-
-### 3. Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run tests for specific service
-npm test --workspace=@giga/authentication-service
-
-# Run tests in watch mode
-npm run test:watch --workspace=@giga/authentication-service
-```
-
-### 4. Linting and Code Quality
-
-```bash
-# Lint all code
-npm run lint
-
-# Fix linting issues
-npm run lint:fix
-
-# Check TypeScript compilation
-npm run build
-```
-
-## Docker Development
-
-### Development Environment
+### Quick Commands
 
 ```bash
 # Start all services
-npm run docker:dev
+docker-compose -f docker-compose.dev.yml up -d
+
+# Start specific service
+docker-compose -f docker-compose.dev.yml up -d authentication-service
 
 # View logs
 docker-compose -f docker-compose.dev.yml logs -f
 
-# Stop services
-npm run docker:dev:down
+# Stop all services
+docker-compose -f docker-compose.dev.yml down
+
+# Reset environment (WARNING: deletes all data)
+docker-compose -f docker-compose.dev.yml down -v
 ```
 
-### Production Environment
+### Docker Compose Files
+
+- **`docker-compose.essential.yml`** - Core services only
+- **`docker-compose.dev.yml`** - Full development environment
+- **`docker-compose.prod.yml`** - Production configuration
+
+For detailed Docker setup instructions, see [DOCKER_SETUP_GUIDE.md](./DOCKER_SETUP_GUIDE.md).
+
+## 🔧 Local Development
+
+### 1. Start Infrastructure
 
 ```bash
-# Build and start production environment
-npm run docker:prod
-
-# Stop production environment
-npm run docker:prod:down
+# Start databases and caches
+docker-compose -f docker-compose.essential.yml up -d postgres redis rabbitmq
 ```
 
-## Monitoring and Observability
-
-### Prometheus Metrics
-
-Access Prometheus at http://localhost:9090 to view metrics and create alerts.
-
-### Grafana Dashboards
-
-Access Grafana at http://localhost:3000 (admin/admin) for visualization dashboards.
-
-### Application Logs
-
-All services use structured JSON logging. View logs with:
+### 2. Set Environment Variables
 
 ```bash
-# View all service logs
-docker-compose -f docker-compose.dev.yml logs -f
+# Database connection
+export DATABASE_URL="postgresql://postgres:password@localhost:5432/auth_db"
+export REDIS_URL="redis://localhost:6379"
 
-# View specific service logs
-docker-compose -f docker-compose.dev.yml logs -f authentication-service
+# Service URLs
+export AUTH_SERVICE_URL="http://localhost:8001"
+export ADMIN_SERVICE_URL="http://localhost:3006"
 ```
 
-## API Documentation
+### 3. Run Services Locally
 
-Each service exposes OpenAPI/Swagger documentation:
+```bash
+# Authentication Service
+cd services/authentication-service
+pnpm install
+pnpm run dev
 
-- API Gateway: http://localhost:8000/docs
-- Authentication: http://localhost:8001/docs
-- Payment: http://localhost:8002/docs
-- Notification: http://localhost:8003/docs
-- Search: http://localhost:8004/docs
-- File: http://localhost:8005/docs
-- Analytics: http://localhost:8006/docs
+# Admin Service
+cd services/admin-service
+pnpm install
+pnpm run dev
 
-## Contributing
+# API Gateway
+cd services/api-gateway
+pnpm install
+pnpm run dev
+```
 
-1. Follow the established coding standards (see .eslintrc.js)
-2. Write tests for new functionality
-3. Update documentation as needed
-4. Use conventional commit messages
-5. Ensure all services build and tests pass
+## 📚 Documentation
 
-## Troubleshooting
+### Service Documentation
 
-### Common Issues
+Each service has comprehensive documentation:
 
-1. **Port conflicts**: Ensure no other services are running on the required ports
-2. **Database connection**: Verify PostgreSQL is running and credentials are correct
-3. **Memory issues**: Increase Docker memory allocation if services fail to start
-4. **Permission errors**: Ensure proper file permissions for Docker volumes
+- [Authentication Service](./services/authentication-service/README.md)
+- [Admin Service](./services/admin-service/README.md)
+- [API Gateway](./services/api-gateway/README.md)
+- [E-commerce Service](./services/ecommerce-service/README.md)
+- [Hotel Service](./services/hotel-service/README.md)
+- [Taxi Service](./services/taxi-service/README.md)
+- [Payment Service](./services/payment-service/README.md)
+- [Notification Service](./services/notification-service/README.md)
+- [Search Service](./services/search-service/README.md)
+- [File Service](./services/file-service/README.md)
+- [Analytics Service](./services/analytics-service/README.md)
+- [Advertisement Service](./services/advertisement-service/README.md)
+- [Messaging Service](./services/messaging-service/README.md)
+
+### Platform Documentation
+
+- [Docker Setup Guide](./DOCKER_SETUP_GUIDE.md) - Complete Docker setup instructions
+- [Architecture Overview](./docs/architecture.md) - System architecture details
+- [Development Guide](./docs/development/DEVELOPMENT_DOCS.md) - Development guidelines
+- [API Documentation](./docs/architecture/SWAGGER_AND_TYPES_SUMMARY.md) - API specifications
+
+## 🧪 Testing
+
+### Run All Tests
+
+```bash
+# Run tests for all services
+pnpm test
+
+# Run tests with coverage
+pnpm run test:coverage
+
+# Run specific service tests
+pnpm test --workspace=@giga/authentication-service
+```
 
 ### Health Checks
 
-Each service exposes a health check endpoint:
-
 ```bash
-curl http://localhost:8001/health  # Authentication service
-curl http://localhost:8002/health  # Payment service
-# ... etc
+# Check all services
+curl http://localhost:3000/health
+
+# Check specific service
+curl http://localhost:8001/health
+curl http://localhost:3006/health
 ```
 
-### Logs and Debugging
+## 🔍 Monitoring
 
-Enable debug logging by setting `LOG_LEVEL=debug` in your .env file.
+### Metrics & Health
 
-## License
+- **Health Endpoints**: `/health` on each service
+- **Metrics**: `/metrics` for Prometheus monitoring
+- **API Documentation**: `/api-docs` for Swagger UI
 
-MIT License - see LICENSE file for details.
+### Logs
+
+```bash
+# View service logs
+docker-compose -f docker-compose.dev.yml logs -f authentication-service
+
+# View all logs
+docker-compose -f docker-compose.dev.yml logs -f
+```
+
+## 🚀 Deployment
+
+### Development
+
+```bash
+# Start development environment
+pnpm run docker:dev
+
+# Or manually
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+### Production
+
+```bash
+# Start production environment
+pnpm run docker:prod
+
+# Or manually
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### Kubernetes
+
+Kubernetes manifests are available in the `k8s/` directory:
+
+```bash
+# Deploy to Kubernetes
+kubectl apply -f k8s/manifests/
+
+# Or use Helm charts
+helm install giga-platform ./k8s/charts/multi-service-platform/
+```
+
+## 🛠️ Development Workflow
+
+### 1. Start Infrastructure
+
+```bash
+docker-compose -f docker-compose.essential.yml up -d postgres redis
+```
+
+### 2. Run Services Locally
+
+```bash
+# Set environment variables
+export DATABASE_URL="postgresql://postgres:password@localhost:5432/auth_db"
+
+# Start service
+cd services/authentication-service
+npm run dev
+```
+
+### 3. Mix Local and Docker
+
+```bash
+# Some services in Docker, others locally
+docker-compose -f docker-compose.dev.yml up -d api-gateway
+pnpm run dev:auth  # Run auth service locally
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Key environment variables for each service:
+
+```bash
+# Database
+DATABASE_URL=postgresql://postgres:password@localhost:5432/database_name
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# JWT
+JWT_SECRET=your-super-secret-jwt-key-here
+
+# Service URLs
+AUTH_SERVICE_URL=http://localhost:8001
+ADMIN_SERVICE_URL=http://localhost:3006
+```
+
+### Service Configuration
+
+Each service has its own configuration file and environment variables. See individual service README files for complete configuration details.
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+1. **Port Already in Use**
+   ```bash
+   lsof -ti :8001 | xargs kill
+   ```
+
+2. **Database Connection Error**
+   - Ensure PostgreSQL is running
+   - Check DATABASE_URL format
+   - Verify database exists
+
+3. **Service Won't Start**
+   - Check service logs: `docker logs <container_name>`
+   - Verify environment variables
+   - Check dependencies
+
+### Reset Environment
+
+```bash
+# Stop all services
+docker-compose -f docker-compose.dev.yml down
+
+# Remove volumes (WARNING: deletes all data)
+docker-compose -f docker-compose.dev.yml down -v
+
+# Start fresh
+docker-compose -f docker-compose.dev.yml up -d
+```
+
+## 📖 API Usage
+
+### Authentication
+
+```bash
+# Register user
+curl -X POST http://localhost:8001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123","firstName":"John","lastName":"Doe"}'
+
+# Login
+curl -X POST http://localhost:8001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123"}'
+```
+
+### Products
+
+```bash
+# Get products
+curl http://localhost:8002/products
+
+# Search products
+curl "http://localhost:8002/products/search?q=laptop&category=electronics"
+```
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Update documentation
+6. Submit a pull request
+
+### Development Standards
+
+- Follow TypeScript best practices
+- Write comprehensive tests
+- Update documentation
+- Follow REST API conventions
+- Use proper error handling
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+
+## 🆘 Support
+
+- **Documentation**: Check the service-specific README files
+- **Issues**: Create GitHub issues for bugs or feature requests
+- **Discussions**: Use GitHub Discussions for questions and ideas
+
+## 🔗 Quick Links
+
+- [Docker Setup Guide](./DOCKER_SETUP_GUIDE.md)
+- [Service Documentation](./services/)
+- [Architecture Overview](./docs/architecture.md)
+- [Development Guide](./docs/development/DEVELOPMENT_DOCS.md)
+- [API Documentation](./docs/architecture/SWAGGER_AND_TYPES_SUMMARY.md)
+
+---
+
+**Happy coding! 🚀**
