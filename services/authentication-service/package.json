@@ -37,10 +37,10 @@
         "qrcode": "^1.5.3",
         "geoip-lite": "^1.4.7",
         "ua-parser-js": "^1.0.37",
-        "rate-limiter-flexible": "^3.0.8",
+        "rate-limiter-flexible": "^2.3.12",
         "express-rate-limit": "^7.1.5",
         "express-slow-down": "^2.0.1",
-        "@giga/common": "workspace:*"
+        "@giga/common": "file:../../packages/common"
     },
     "devDependencies": {
         "@types/express": "^4.17.17",
