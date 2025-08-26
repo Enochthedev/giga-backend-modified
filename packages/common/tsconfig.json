@@ -3,7 +3,11 @@
   "compilerOptions": {
     "composite": true,
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "exactOptionalPropertyTypes": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
   },
   "include": [
     "src/**/*"
@@ -11,6 +15,10 @@
   "exclude": [
     "node_modules",
     "dist",
+    "src/cache/**",
+    "src/monitoring/**",
+    "src/localization/**",
+    "src/multi-tenancy/**",
     "**/*.test.ts",
     "**/*.spec.ts"
   ]

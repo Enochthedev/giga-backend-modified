@@ -2,6 +2,7 @@
 export { RedisClient, createRedisClient, getRedisClient } from './redis-client';
 export { cacheMiddleware, CacheInvalidator, cacheInvalidator, cacheable } from './cache-middleware';
 export { RedisSessionStore, SessionManager, sessionManager } from './session-store';
+export { CacheInitializer, CacheSettings, CacheConfigFactory } from './cache-config';
 export {
     CacheInvalidationManager,
     InvalidationStrategies,

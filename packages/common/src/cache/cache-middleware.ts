@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getRedisClient } from './redis-client';
-import { logger } from '../logger';
+import { Logger } from '../utils/logger';
 import crypto from 'crypto';
 
 export interface CacheOptions {
@@ -83,7 +83,7 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
             const cachedData = await redis.get<CachedResponse>(cacheKey);
 
             if (cachedData) {
-                logger.debug(`Cache hit for key: ${cacheKey}`);
+                Logger.debug(`Cache hit for key: ${cacheKey}`);
 
                 // Check if cache is still valid
                 const now = Date.now();
@@ -107,7 +107,7 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
                 }
             }
 
-            logger.debug(`Cache miss for key: ${cacheKey}`);
+            Logger.debug(`Cache miss for key: ${cacheKey}`);
 
             // Store original response methods
             const originalSend = res.send;
@@ -152,19 +152,19 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
 
                     // Store in cache asynchronously
                     redis.set(cacheKey, cachedResponse, defaultTTL).catch(error => {
-                        logger.error(`Error caching response for key ${cacheKey}:`, error);
+                        Logger.error(`Error caching response for key ${cacheKey}:`, error as Error);
                     });
 
                     // Store cache tags for invalidation
                     if (options.tags && options.tags.length > 0) {
                         options.tags.forEach(tag => {
                             redis.sadd(`cache:tag:${tag}`, cacheKey).catch(error => {
-                                logger.error(`Error adding cache tag ${tag}:`, error);
+                                Logger.error(`Error adding cache tag ${tag}:`, error as Error);
                             });
                         });
                     }
 
-                    logger.debug(`Response cached for key: ${cacheKey}`);
+                    Logger.debug(`Response cached for key: ${cacheKey}`);
                 }
 
                 // Add cache headers
@@ -198,7 +198,7 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
                     };
 
                     redis.set(cacheKey, cachedResponse, defaultTTL).catch(error => {
-                        logger.error(`Error caching response for key ${cacheKey}:`, error);
+                        Logger.error(`Error caching response for key ${cacheKey}:`, error as Error);
                     });
                 }
 
@@ -208,7 +208,7 @@ export const cacheMiddleware = (options: CacheOptions = {}) => {
 
             next();
         } catch (error) {
-            logger.error(`Cache middleware error for key ${cacheKey}:`, error);
+            Logger.error(`Cache middleware error for key ${cacheKey}:`, error as Error);
             // Continue without caching on error
             next();
         }
@@ -227,10 +227,10 @@ export class CacheInvalidator {
     async invalidatePattern(pattern: string): Promise<number> {
         try {
             const deletedCount = await this.redis.delPattern(pattern);
-            logger.info(`Invalidated ${deletedCount} cache entries matching pattern: ${pattern}`);
+            Logger.info(`Invalidated ${deletedCount} cache entries matching pattern: ${pattern}`);
             return deletedCount;
         } catch (error) {
-            logger.error(`Error invalidating cache pattern ${pattern}:`, error);
+            Logger.error(`Error invalidating cache pattern ${pattern}:`, error as Error);
             return 0;
         }
     }
@@ -253,13 +253,13 @@ export class CacheInvalidator {
                     // Clean up tag set
                     await this.redis.del(`cache:tag:${tag}`);
 
-                    logger.info(`Invalidated ${deleted} cache entries for tag: ${tag}`);
+                    Logger.info(`Invalidated ${deleted} cache entries for tag: ${tag}`);
                 }
             }
 
             return totalDeleted;
         } catch (error) {
-            logger.error(`Error invalidating cache by tags ${tags.join(', ')}:`, error);
+            Logger.error(`Error invalidating cache by tags ${tags.join(', ')}:`, error as Error);
             return 0;
         }
     }
@@ -271,11 +271,11 @@ export class CacheInvalidator {
         try {
             const deleted = await this.redis.del(key);
             if (deleted) {
-                logger.info(`Invalidated cache key: ${key}`);
+                Logger.info(`Invalidated cache key: ${key}`);
             }
             return deleted;
         } catch (error) {
-            logger.error(`Error invalidating cache key ${key}:`, error);
+            Logger.error(`Error invalidating cache key ${key}:`, error as Error);
             return false;
         }
     }
@@ -286,9 +286,9 @@ export class CacheInvalidator {
     async clearAll(): Promise<void> {
         try {
             await this.redis.getClient().flushdb();
-            logger.info('Cleared all cache');
+            Logger.info('Cleared all cache');
         } catch (error) {
-            logger.error('Error clearing all cache:', error);
+            Logger.error('Error clearing all cache:', error as Error);
         }
     }
 }
@@ -317,7 +317,7 @@ export const cacheable = (options: CacheOptions = {}) => {
                 // Try to get cached result
                 const cachedResult = await redis.get(cacheKey);
                 if (cachedResult !== null) {
-                    logger.debug(`Method cache hit for: ${cacheKey}`);
+                    Logger.debug(`Method cache hit for: ${cacheKey}`);
                     return cachedResult;
                 }
 
@@ -325,11 +325,11 @@ export const cacheable = (options: CacheOptions = {}) => {
                 const result = await method.apply(this, args);
 
                 await redis.set(cacheKey, result, defaultTTL);
-                logger.debug(`Method result cached for: ${cacheKey}`);
+                Logger.debug(`Method result cached for: ${cacheKey}`);
 
                 return result;
             } catch (error) {
-                logger.error(`Method cache error for ${cacheKey}:`, error);
+                Logger.error(`Method cache error for ${cacheKey}:`, error as Error);
                 // Execute method without caching on error
                 return await method.apply(this, args);
             }

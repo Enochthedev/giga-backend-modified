@@ -1,5 +1,5 @@
 import { getRedisClient } from '../redis-client';
-import { logger } from '../../logger';
+import { Logger } from '../../utils/logger';
 import { EventEmitter } from 'events';
 
 export interface RedisMetrics {
@@ -63,7 +63,7 @@ export class RedisMonitor extends EventEmitter {
                 // Check for alerts
                 this.checkAlerts(metrics);
             } catch (error) {
-                logger.error('Error collecting Redis metrics:', error);
+                Logger.error('Error collecting Redis metrics:', error as Error);
                 this.emit('error', error);
             }
         }, intervalMs);
@@ -78,12 +78,12 @@ export class RedisMonitor extends EventEmitter {
                     logger.warn('Redis health check failed:', health);
                 }
             } catch (error) {
-                logger.error('Error performing Redis health check:', error);
+                Logger.error('Error performing Redis health check:', error as Error);
                 this.emit('error', error);
             }
         }, intervalMs / 2); // Health checks more frequently
 
-        logger.info('Redis monitoring started');
+        Logger.info('Redis monitoring started');
     }
 
     /**
@@ -105,7 +105,7 @@ export class RedisMonitor extends EventEmitter {
         }
 
         this.isMonitoring = false;
-        logger.info('Redis monitoring stopped');
+        Logger.info('Redis monitoring stopped');
     }
 
     /**
@@ -119,7 +119,7 @@ export class RedisMonitor extends EventEmitter {
             const metrics = this.parseRedisInfo(info, keyspaceInfo);
             return metrics;
         } catch (error) {
-            logger.error('Error collecting Redis metrics:', error);
+            Logger.error('Error collecting Redis metrics:', error as Error);
             throw error;
         }
     }
@@ -233,7 +233,7 @@ export class RedisMonitor extends EventEmitter {
                 timestamp: Date.now(),
             };
         } catch (error) {
-            logger.error('Redis health check failed:', error);
+            Logger.error('Redis health check failed:', error as Error);
             return {
                 status: 'unhealthy',
                 metrics: {
@@ -254,7 +254,7 @@ export class RedisMonitor extends EventEmitter {
                     replicationRole: 'unknown',
                     replicationOffset: 0,
                 },
-                issues: [`Redis connection failed: ${error.message}`],
+                issues: [`Redis connection failed: ${(error as Error).message}`],
                 timestamp: Date.now(),
             };
         }
@@ -333,7 +333,7 @@ export class RedisMonitor extends EventEmitter {
         const testKey = 'perf_test_';
         const testValue = 'performance_test_value_' + Date.now();
 
-        logger.info(`Starting Redis performance test with ${operations} operations`);
+        Logger.info(`Starting Redis performance test with ${operations} operations`);
 
         const startTime = Date.now();
 
@@ -368,7 +368,7 @@ export class RedisMonitor extends EventEmitter {
             totalTime,
         };
 
-        logger.info('Redis performance test completed:', results);
+        Logger.info('Redis performance test completed:', results);
         return results;
     }
 
@@ -386,7 +386,7 @@ export class RedisMonitor extends EventEmitter {
 
             return configObj;
         } catch (error) {
-            logger.error('Error getting Redis configuration:', error);
+            Logger.error('Error getting Redis configuration:', error as Error);
             return {};
         }
     }
@@ -398,7 +398,7 @@ export class RedisMonitor extends EventEmitter {
         try {
             return await this.redis.getClient().slowlog('GET', count);
         } catch (error) {
-            logger.error('Error getting Redis slow log:', error);
+            Logger.error('Error getting Redis slow log:', error as Error);
             return [];
         }
     }

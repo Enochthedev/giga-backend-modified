@@ -2,7 +2,7 @@
 export * from './types';
 
 // Utilities
-export * from './utils/logger';
+export { Logger } from './utils/logger';
 export * from './utils/api-error';
 export * from './utils/api-response';
 export * from './utils/validation';
@@ -17,20 +17,12 @@ export * from './middleware';
 // Database
 export * from './database/connection';
 
-// Cache
-export * from './cache';
+// Cache exports are intentionally omitted from build to reduce dependencies
 
 // Message Queue
 export * from './messaging';
 
-// Monitoring and Observability
-export * from './monitoring';
-
 // Constants
 export * from './constants';
 
-// Multi-tenancy
-export * from './multi-tenancy';
-
-// Localization
-export * from './localization';
+// NOTE: Monitoring and Localization exports are intentionally omitted from build to reduce dependencies

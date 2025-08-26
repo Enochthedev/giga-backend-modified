@@ -1,5 +1,5 @@
 import Redis, { RedisOptions, Cluster } from 'ioredis';
-import { logger } from '../logger';
+import { Logger } from '../utils/logger';
 
 export interface CacheConfig {
     host?: string;
@@ -64,28 +64,28 @@ export class RedisClient {
 
     private setupEventHandlers(): void {
         this.client.on('connect', () => {
-            logger.info('Redis client connected');
+            Logger.info('Redis client connected');
         });
 
         this.client.on('ready', () => {
-            logger.info('Redis client ready');
+            Logger.info('Redis client ready');
         });
 
-        this.client.on('error', (error) => {
-            logger.error('Redis client error:', error);
+        this.client.on('error', (error: Error) => {
+            Logger.error('Redis client error:', error);
         });
 
         this.client.on('close', () => {
-            logger.warn('Redis client connection closed');
+            Logger.warn('Redis client connection closed');
         });
 
         this.client.on('reconnecting', () => {
-            logger.info('Redis client reconnecting');
+            Logger.info('Redis client reconnecting');
         });
 
         if (this.client instanceof Redis.Cluster) {
-            this.client.on('node error', (error, node) => {
-                logger.error(`Redis cluster node error on ${node.options.host}:${node.options.port}:`, error);
+            this.client.on('node error', (error: Error, node: any) => {
+                Logger.error(`Redis cluster node error on ${node.options.host}:${node.options.port}:`, error);
             });
         }
     }
@@ -98,7 +98,7 @@ export class RedisClient {
             const value = await this.client.get(key);
             return value ? JSON.parse(value) : null;
         } catch (error) {
-            logger.error(`Error getting cache key ${key}:`, error);
+            Logger.error(`Error getting cache key ${key}:`, error as Error);
             return null;
         }
     }
@@ -116,7 +116,7 @@ export class RedisClient {
             }
             return true;
         } catch (error) {
-            logger.error(`Error setting cache key ${key}:`, error);
+            Logger.error(`Error setting cache key ${key}:`, error as Error);
             return false;
         }
     }
@@ -129,7 +129,7 @@ export class RedisClient {
             const result = await this.client.del(key);
             return result > 0;
         } catch (error) {
-            logger.error(`Error deleting cache key ${key}:`, error);
+            Logger.error(`Error deleting cache key ${key}:`, error as Error);
             return false;
         }
     }
@@ -145,7 +145,7 @@ export class RedisClient {
             const result = await this.client.del(...keys);
             return result;
         } catch (error) {
-            logger.error(`Error deleting cache pattern ${pattern}:`, error);
+            Logger.error(`Error deleting cache pattern ${pattern}:`, error as Error);
             return 0;
         }
     }
@@ -158,7 +158,7 @@ export class RedisClient {
             const result = await this.client.exists(key);
             return result === 1;
         } catch (error) {
-            logger.error(`Error checking cache key existence ${key}:`, error);
+            Logger.error(`Error checking cache key existence ${key}:`, error as Error);
             return false;
         }
     }
@@ -171,7 +171,7 @@ export class RedisClient {
             const result = await this.client.expire(key, ttlSeconds);
             return result === 1;
         } catch (error) {
-            logger.error(`Error setting expiration for cache key ${key}:`, error);
+            Logger.error(`Error setting expiration for cache key ${key}:`, error as Error);
             return false;
         }
     }
@@ -183,7 +183,7 @@ export class RedisClient {
         try {
             return await this.client.ttl(key);
         } catch (error) {
-            logger.error(`Error getting TTL for cache key ${key}:`, error);
+            Logger.error(`Error getting TTL for cache key ${key}:`, error as Error);
             return -1;
         }
     }
@@ -195,7 +195,7 @@ export class RedisClient {
         try {
             return await this.client.incr(key);
         } catch (error) {
-            logger.error(`Error incrementing cache key ${key}:`, error);
+            Logger.error(`Error incrementing cache key ${key}:`, error as Error);
             throw error;
         }
     }
@@ -207,7 +207,7 @@ export class RedisClient {
         try {
             return await this.client.incrby(key, increment);
         } catch (error) {
-            logger.error(`Error incrementing cache key ${key} by ${increment}:`, error);
+            Logger.error(`Error incrementing cache key ${key} by ${increment}:`, error as Error);
             throw error;
         }
     }
@@ -219,7 +219,7 @@ export class RedisClient {
         try {
             return await this.client.hget(key, field);
         } catch (error) {
-            logger.error(`Error getting hash field ${field} from ${key}:`, error);
+            Logger.error(`Error getting hash field ${field} from ${key}:`, error as Error);
             return null;
         }
     }
@@ -228,7 +228,7 @@ export class RedisClient {
         try {
             return await this.client.hset(key, field, value);
         } catch (error) {
-            logger.error(`Error setting hash field ${field} in ${key}:`, error);
+            Logger.error(`Error setting hash field ${field} in ${key}:`, error as Error);
             throw error;
         }
     }
@@ -237,7 +237,7 @@ export class RedisClient {
         try {
             return await this.client.hgetall(key);
         } catch (error) {
-            logger.error(`Error getting all hash fields from ${key}:`, error);
+            Logger.error(`Error getting all hash fields from ${key}:`, error as Error);
             return {};
         }
     }
@@ -249,7 +249,7 @@ export class RedisClient {
         try {
             return await this.client.lpush(key, ...values);
         } catch (error) {
-            logger.error(`Error pushing to list ${key}:`, error);
+            Logger.error(`Error pushing to list ${key}:`, error as Error);
             throw error;
         }
     }
@@ -258,7 +258,7 @@ export class RedisClient {
         try {
             return await this.client.rpop(key);
         } catch (error) {
-            logger.error(`Error popping from list ${key}:`, error);
+            Logger.error(`Error popping from list ${key}:`, error as Error);
             return null;
         }
     }
@@ -267,7 +267,7 @@ export class RedisClient {
         try {
             return await this.client.lrange(key, start, stop);
         } catch (error) {
-            logger.error(`Error getting range from list ${key}:`, error);
+            Logger.error(`Error getting range from list ${key}:`, error as Error);
             return [];
         }
     }
@@ -279,7 +279,7 @@ export class RedisClient {
         try {
             return await this.client.sadd(key, ...members);
         } catch (error) {
-            logger.error(`Error adding to set ${key}:`, error);
+            Logger.error(`Error adding to set ${key}:`, error as Error);
             throw error;
         }
     }
@@ -288,7 +288,7 @@ export class RedisClient {
         try {
             return await this.client.smembers(key);
         } catch (error) {
-            logger.error(`Error getting set members from ${key}:`, error);
+            Logger.error(`Error getting set members from ${key}:`, error as Error);
             return [];
         }
     }
@@ -298,7 +298,7 @@ export class RedisClient {
             const result = await this.client.sismember(key, member);
             return result === 1;
         } catch (error) {
-            logger.error(`Error checking set membership in ${key}:`, error);
+            Logger.error(`Error checking set membership in ${key}:`, error as Error);
             return false;
         }
     }
@@ -310,7 +310,7 @@ export class RedisClient {
         try {
             return await this.client.publish(channel, message);
         } catch (error) {
-            logger.error(`Error publishing to channel ${channel}:`, error);
+            Logger.error(`Error publishing to channel ${channel}:`, error as Error);
             throw error;
         }
     }
@@ -328,9 +328,9 @@ export class RedisClient {
     async disconnect(): Promise<void> {
         try {
             await this.client.quit();
-            logger.info('Redis client disconnected');
+            Logger.info('Redis client disconnected');
         } catch (error) {
-            logger.error('Error disconnecting Redis client:', error);
+            Logger.error('Error disconnecting Redis client:', error as Error);
         }
     }
 
@@ -342,7 +342,7 @@ export class RedisClient {
             const result = await this.client.ping();
             return result === 'PONG';
         } catch (error) {
-            logger.error('Redis ping failed:', error);
+            Logger.error('Redis ping failed:', error as Error);
             return false;
         }
     }

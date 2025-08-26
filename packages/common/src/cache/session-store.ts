@@ -1,6 +1,6 @@
 import { SessionData, Store } from 'express-session';
 import { getRedisClient } from './redis-client';
-import { logger } from '../logger';
+import { Logger } from '../utils/logger';
 
 export interface SessionConfig {
     prefix?: string;
@@ -49,12 +49,12 @@ export class RedisSessionStore extends Store {
                     const session = this.serializer.parse(data);
                     callback(null, session);
                 } catch (error) {
-                    logger.error(`Error parsing session ${sid}:`, error);
+                    Logger.error(`Error parsing session ${sid}:`, error as Error);
                     callback(error);
                 }
             })
             .catch((error) => {
-                logger.error(`Error getting session ${sid}:`, error);
+                Logger.error(`Error getting session ${sid}:`, error as Error);
                 callback(error);
             });
     }
@@ -79,11 +79,11 @@ export class RedisSessionStore extends Store {
                     if (callback) callback();
                 })
                 .catch((error) => {
-                    logger.error(`Error setting session ${sid}:`, error);
+                    Logger.error(`Error setting session ${sid}:`, error as Error);
                     if (callback) callback(error);
                 });
         } catch (error) {
-            logger.error(`Error serializing session ${sid}:`, error);
+            Logger.error(`Error serializing session ${sid}:`, error as Error);
             if (callback) callback(error);
         }
     }
@@ -99,7 +99,7 @@ export class RedisSessionStore extends Store {
                 if (callback) callback();
             })
             .catch((error) => {
-                logger.error(`Error destroying session ${sid}:`, error);
+                Logger.error(`Error destroying session ${sid}:`, error as Error);
                 if (callback) callback(error);
             });
     }
@@ -121,7 +121,7 @@ export class RedisSessionStore extends Store {
                 if (callback) callback();
             })
             .catch((error) => {
-                logger.error(`Error touching session ${sid}:`, error);
+                Logger.error(`Error touching session ${sid}:`, error as Error);
                 if (callback) callback(error);
             });
     }
@@ -151,12 +151,12 @@ export class RedisSessionStore extends Store {
 
                     callback(null, sessions);
                 } catch (error) {
-                    logger.error('Error getting all sessions:', error);
+                    Logger.error('Error getting all sessions:', error as Error);
                     callback(error);
                 }
             })
             .catch((error) => {
-                logger.error('Error getting session keys:', error);
+                Logger.error('Error getting session keys:', error as Error);
                 callback(error);
             });
     }
@@ -172,7 +172,7 @@ export class RedisSessionStore extends Store {
                 callback(null, keys.length);
             })
             .catch((error) => {
-                logger.error('Error getting session count:', error);
+                Logger.error('Error getting session count:', error as Error);
                 callback(error);
             });
     }
@@ -188,7 +188,7 @@ export class RedisSessionStore extends Store {
                 if (callback) callback();
             })
             .catch((error) => {
-                logger.error('Error clearing sessions:', error);
+                Logger.error('Error clearing sessions:', error as Error);
                 if (callback) callback(error);
             });
     }
@@ -213,7 +213,7 @@ export class SessionManager {
             const userSessionsKey = `user:${userId}:sessions`;
             return await this.redis.smembers(userSessionsKey);
         } catch (error) {
-            logger.error(`Error getting user sessions for ${userId}:`, error);
+            Logger.error(`Error getting user sessions for ${userId}:`, error as Error);
             return [];
         }
     }
@@ -231,7 +231,7 @@ export class SessionManager {
             const sessionUserKey = `session:${sessionId}:user`;
             await this.redis.set(sessionUserKey, userId, ttl);
         } catch (error) {
-            logger.error(`Error adding user session ${sessionId} for ${userId}:`, error);
+            Logger.error(`Error adding user session ${sessionId} for ${userId}:`, error as Error);
         }
     }
 
@@ -247,7 +247,7 @@ export class SessionManager {
             const sessionUserKey = `session:${sessionId}:user`;
             await this.redis.del(sessionUserKey);
         } catch (error) {
-            logger.error(`Error removing user session ${sessionId} for ${userId}:`, error);
+            Logger.error(`Error removing user session ${sessionId} for ${userId}:`, error as Error);
         }
     }
 
@@ -274,10 +274,10 @@ export class SessionManager {
             const userSessionsKey = `user:${userId}:sessions`;
             await this.redis.del(userSessionsKey);
 
-            logger.info(`Destroyed ${destroyedCount} sessions for user ${userId}`);
+            Logger.info(`Destroyed ${destroyedCount} sessions for user ${userId}`);
             return destroyedCount;
         } catch (error) {
-            logger.error(`Error destroying user sessions for ${userId}:`, error);
+            Logger.error(`Error destroying user sessions for ${userId}:`, error as Error);
             return 0;
         }
     }
@@ -310,7 +310,7 @@ export class SessionManager {
                 ttl: ttl > 0 ? ttl : undefined
             };
         } catch (error) {
-            logger.error(`Error getting session info for ${sessionId}:`, error);
+            Logger.error(`Error getting session info for ${sessionId}:`, error as Error);
             return null;
         }
     }
@@ -330,7 +330,7 @@ export class SessionManager {
 
             return sessionExtended && userMappingExtended;
         } catch (error) {
-            logger.error(`Error extending session ${sessionId}:`, error);
+            Logger.error(`Error extending session ${sessionId}:`, error as Error);
             return false;
         }
     }
@@ -368,7 +368,7 @@ export class SessionManager {
                 expiredSessions
             };
         } catch (error) {
-            logger.error('Error getting session stats:', error);
+            Logger.error('Error getting session stats:', error as Error);
             return {
                 totalSessions: 0,
                 activeSessions: 0,

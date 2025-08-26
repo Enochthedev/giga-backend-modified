@@ -1,9 +1,9 @@
 import { getRedisClient } from './redis-client';
-import { logger } from '../logger';
+import { Logger } from '../utils/logger';
 import { EventEmitter } from 'events';
 
 export interface InvalidationRule {
-    pattern: string;
+    pattern?: string;
     tags?: string[];
     condition?: (data: any) => boolean;
     delay?: number; // Delay in milliseconds before invalidation
@@ -43,7 +43,7 @@ export class CacheInvalidationManager extends EventEmitter {
             this.rules.set(eventType, []);
         }
         this.rules.get(eventType)!.push(rule);
-        logger.debug(`Registered invalidation rule for event: ${eventType}`);
+        Logger.debug(`Registered invalidation rule for event: ${eventType}`);
     }
 
     /**
@@ -71,7 +71,7 @@ export class CacheInvalidationManager extends EventEmitter {
             return;
         }
 
-        logger.debug(`Processing invalidation for event: ${event.type}`);
+        Logger.debug(`Processing invalidation for event: ${event.type}`);
 
         for (const rule of rules) {
             try {
@@ -88,7 +88,7 @@ export class CacheInvalidationManager extends EventEmitter {
                     await this.executeInvalidation(event, rule);
                 }
             } catch (error) {
-                logger.error(`Error processing invalidation rule for event ${event.type}:`, error);
+                Logger.error(`Error processing invalidation rule for event ${event.type}:`, error as Error);
             }
         }
     }
@@ -110,7 +110,7 @@ export class CacheInvalidationManager extends EventEmitter {
         }, rule.delay);
 
         this.delayedInvalidations.set(delayKey, timeout);
-        logger.debug(`Scheduled delayed invalidation for ${rule.delay}ms`);
+        Logger.debug(`Scheduled delayed invalidation for ${rule.delay}ms`);
     }
 
     /**
@@ -123,17 +123,17 @@ export class CacheInvalidationManager extends EventEmitter {
         if (rule.pattern) {
             const pattern = this.interpolatePattern(rule.pattern, event);
             invalidatedCount += await this.redis.delPattern(pattern);
-            logger.debug(`Invalidated pattern: ${pattern}`);
+            Logger.debug(`Invalidated pattern: ${pattern}`);
         }
 
         // Invalidate by tags
         if (rule.tags && rule.tags.length > 0) {
             const interpolatedTags = rule.tags.map(tag => this.interpolatePattern(tag, event));
             invalidatedCount += await this.invalidateByTags(interpolatedTags);
-            logger.debug(`Invalidated tags: ${interpolatedTags.join(', ')}`);
+            Logger.debug(`Invalidated tags: ${interpolatedTags.join(', ')}`);
         }
 
-        logger.info(`Invalidated ${invalidatedCount} cache entries for event: ${event.type}`);
+        Logger.info(`Invalidated ${invalidatedCount} cache entries for event: ${event.type}`);
     }
 
     /**
@@ -165,7 +165,7 @@ export class CacheInvalidationManager extends EventEmitter {
                     await this.redis.del(`cache:tag:${tag}`);
                 }
             } catch (error) {
-                logger.error(`Error invalidating cache by tag ${tag}:`, error);
+                Logger.error(`Error invalidating cache by tag ${tag}:`, error as Error);
             }
         }
 
@@ -366,20 +366,20 @@ export class CacheWarmingManager {
         dataProvider: () => Promise<any>;
         ttl?: number;
     }>): Promise<void> {
-        logger.info('Starting cache warming...');
+        Logger.info('Starting cache warming...');
 
         const promises = warmingRules.map(async (rule) => {
             try {
                 const data = await rule.dataProvider();
                 await this.redis.set(rule.key, data, rule.ttl || 3600);
-                logger.debug(`Warmed cache key: ${rule.key}`);
+                Logger.debug(`Warmed cache key: ${rule.key}`);
             } catch (error) {
-                logger.error(`Error warming cache key ${rule.key}:`, error);
+                Logger.error(`Error warming cache key ${rule.key}:`, error as Error);
             }
         });
 
         await Promise.allSettled(promises);
-        logger.info(`Cache warming completed for ${warmingRules.length} keys`);
+        Logger.info(`Cache warming completed for ${warmingRules.length} keys`);
     }
 
     /**
@@ -394,9 +394,9 @@ export class CacheWarmingManager {
                 await this.redis.set(cacheKey, product, 3600); // 1 hour TTL
             }
 
-            logger.info(`Warmed cache for ${popularProducts.length} popular products`);
+            Logger.info(`Warmed cache for ${popularProducts.length} popular products`);
         } catch (error) {
-            logger.error('Error warming popular products cache:', error);
+            Logger.error('Error warming popular products cache:', error as Error);
         }
     }
 
@@ -412,9 +412,9 @@ export class CacheWarmingManager {
                 await this.redis.set(cacheKey, user, 1800); // 30 minutes TTL
             }
 
-            logger.info(`Warmed cache for ${activeUsers.length} active users`);
+            Logger.info(`Warmed cache for ${activeUsers.length} active users`);
         } catch (error) {
-            logger.error('Error warming user sessions cache:', error);
+            Logger.error('Error warming user sessions cache:', error as Error);
         }
     }
 }

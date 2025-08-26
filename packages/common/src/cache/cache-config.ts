@@ -1,5 +1,5 @@
 import { CacheConfig } from './redis-client';
-import { logger } from '../logger';
+import { Logger } from '../utils/logger';
 
 /**
  * Cache configuration factory
@@ -26,9 +26,9 @@ export class CacheConfigFactory {
                 const sentinels = JSON.parse(process.env.REDIS_SENTINELS);
                 config.sentinels = sentinels;
                 config.name = process.env.REDIS_SENTINEL_NAME || 'mymaster';
-                logger.info('Redis Sentinel configuration loaded');
+                Logger.info('Redis Sentinel configuration loaded');
             } catch (error) {
-                logger.error('Error parsing Redis Sentinels configuration:', error);
+                Logger.error('Error parsing Redis Sentinels configuration:', error as Error);
             }
         }
 
@@ -37,9 +37,9 @@ export class CacheConfigFactory {
             try {
                 const clusterNodes = JSON.parse(process.env.REDIS_CLUSTER_NODES);
                 config.cluster = clusterNodes;
-                logger.info('Redis Cluster configuration loaded');
+                Logger.info('Redis Cluster configuration loaded');
             } catch (error) {
-                logger.error('Error parsing Redis Cluster configuration:', error);
+                Logger.error('Error parsing Redis Cluster configuration:', error as Error);
             }
         }
 
@@ -150,12 +150,12 @@ export class CacheInitializer {
             // Test connection
             const isConnected = await client.ping();
             if (isConnected) {
-                logger.info(`Redis cache initialized successfully in ${environment} mode`);
+                Logger.info(`Redis cache initialized successfully in ${environment} mode`);
             } else {
                 throw new Error('Redis ping failed');
             }
         } catch (error) {
-            logger.error('Failed to initialize Redis cache:', error);
+            Logger.error('Failed to initialize Redis cache:', error as Error);
             throw error;
         }
     }
@@ -174,10 +174,10 @@ export class CacheInitializer {
                 const isHealthy = await client.ping();
 
                 if (!isHealthy) {
-                    logger.error('Redis health check failed');
+                    Logger.error('Redis health check failed');
                 }
             } catch (error) {
-                logger.error('Redis health check error:', error);
+                Logger.error('Redis health check error:', error as Error);
             }
         }, 30000); // Check every 30 seconds
     }
@@ -190,9 +190,9 @@ export class CacheInitializer {
             const { getRedisClient } = await import('./redis-client');
             const client = getRedisClient();
             await client.disconnect();
-            logger.info('Redis cache disconnected gracefully');
+            Logger.info('Redis cache disconnected gracefully');
         } catch (error) {
-            logger.error('Error during Redis shutdown:', error);
+            Logger.error('Error during Redis shutdown:', error as Error);
         }
     }
 }

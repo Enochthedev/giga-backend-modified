@@ -1,5 +1,5 @@
 import { getRedisClient } from './redis-client';
-import { logger } from '../logger';
+import { Logger } from '../utils/logger';
 import { EventEmitter } from 'events';
 
 export interface LocationData {
@@ -70,9 +70,9 @@ export class RealtimeCacheManager extends EventEmitter {
             // Emit location update event
             this.emit('driver.location.updated', { driverId, location });
 
-            logger.debug(`Updated location for driver ${driverId}`);
+            Logger.debug(`Updated location for driver ${driverId}`);
         } catch (error) {
-            logger.error(`Error updating driver location for ${driverId}:`, error);
+            Logger.error(`Error updating driver location for ${driverId}:`, error as Error);
         }
     }
 
@@ -84,7 +84,7 @@ export class RealtimeCacheManager extends EventEmitter {
             const locationKey = `realtime:driver:${driverId}:location`;
             return await this.redis.get<LocationData>(locationKey);
         } catch (error) {
-            logger.error(`Error getting driver location for ${driverId}:`, error);
+            Logger.error(`Error getting driver location for ${driverId}:`, error as Error);
             return null;
         }
     }
@@ -114,20 +114,20 @@ export class RealtimeCacheManager extends EventEmitter {
                 limit
             );
 
-            const results = [];
+            const results: Array<{ driverId: string; distance: number; location?: LocationData }> = [];
 
-            for (const [driverId, distance] of nearbyDrivers) {
-                const location = await this.getDriverLocation(driverId);
+            for (const [driverId, distance] of nearbyDrivers as any[]) {
+                const location = await this.getDriverLocation(driverId as string);
                 results.push({
-                    driverId,
-                    distance: parseFloat(distance),
+                    driverId: String(driverId),
+                    distance: parseFloat(String(distance)),
                     location
                 });
             }
 
             return results;
         } catch (error) {
-            logger.error(`Error finding nearby drivers:`, error);
+            Logger.error(`Error finding nearby drivers:`, error as Error);
             return [];
         }
     }
@@ -163,9 +163,9 @@ export class RealtimeCacheManager extends EventEmitter {
 
             this.emit('driver.status.updated', { driverId, status });
 
-            logger.debug(`Updated status for driver ${driverId}: ${status.status}`);
+            Logger.debug(`Updated status for driver ${driverId}: ${status.status}`);
         } catch (error) {
-            logger.error(`Error updating driver status for ${driverId}:`, error);
+            Logger.error(`Error updating driver status for ${driverId}:`, error as Error);
         }
     }
 
@@ -177,7 +177,7 @@ export class RealtimeCacheManager extends EventEmitter {
             const availableKey = `drivers:available`;
             return await this.redis.smembers(availableKey);
         } catch (error) {
-            logger.error('Error getting available drivers:', error);
+            Logger.error('Error getting available drivers:', error as Error);
             return [];
         }
     }
@@ -195,7 +195,7 @@ export class RealtimeCacheManager extends EventEmitter {
             const availableDrivers = await this.getAvailableDrivers();
             const availableSet = new Set(availableDrivers);
 
-            const results = [];
+            const results: Array<{ driverId: string; distance: number; status: DriverStatus }> = [];
 
             for (const driver of nearbyDrivers) {
                 if (availableSet.has(driver.driverId)) {
@@ -212,7 +212,7 @@ export class RealtimeCacheManager extends EventEmitter {
 
             return results;
         } catch (error) {
-            logger.error('Error getting available drivers near location:', error);
+            Logger.error('Error getting available drivers near location:', error as Error);
             return [];
         }
     }
@@ -225,7 +225,7 @@ export class RealtimeCacheManager extends EventEmitter {
             const statusKey = `realtime:driver:${driverId}:status`;
             return await this.redis.get<DriverStatus>(statusKey);
         } catch (error) {
-            logger.error(`Error getting driver status for ${driverId}:`, error);
+            Logger.error(`Error getting driver status for ${driverId}:`, error as Error);
             return null;
         }
     }
@@ -250,9 +250,9 @@ export class RealtimeCacheManager extends EventEmitter {
                 this.redis.getClient().srem(busyKey, driverId)
             ]);
 
-            logger.debug(`Removed driver ${driverId} from real-time tracking`);
+            Logger.debug(`Removed driver ${driverId} from real-time tracking`);
         } catch (error) {
-            logger.error(`Error removing driver ${driverId}:`, error);
+            Logger.error(`Error removing driver ${driverId}:`, error as Error);
         }
     }
 
@@ -282,9 +282,9 @@ export class RealtimeCacheManager extends EventEmitter {
 
             this.emit('inventory.updated', { productId, inventory });
 
-            logger.debug(`Updated inventory for product ${productId}: ${inventory.available} available`);
+            Logger.debug(`Updated inventory for product ${productId}: ${inventory.available} available`);
         } catch (error) {
-            logger.error(`Error updating inventory for product ${productId}:`, error);
+            Logger.error(`Error updating inventory for product ${productId}:`, error as Error);
         }
     }
 
