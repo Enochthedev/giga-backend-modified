@@ -1,0 +1,292 @@
+{
+    "dashboard": {
+        "id": null,
+        "title": "Business Metrics Dashboard",
+        "tags": [
+            "business",
+            "kpi",
+            "revenue"
+        ],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "1m",
+        "time": {
+            "from": "now-24h",
+            "to": "now"
+        },
+        "panels": [
+            {
+                "id": 1,
+                "title": "Revenue (Last 24h)",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(increase(payment_successful_amount_total[24h]))",
+                        "legendFormat": "Total Revenue"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "currencyUSD",
+                        "color": {
+                            "mode": "value"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "red",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 10000
+                                },
+                                {
+                                    "color": "green",
+                                    "value": 50000
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 6,
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": 2,
+                "title": "Orders Completed (Last 24h)",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(increase(orders_completed_total[24h]))",
+                        "legendFormat": "Orders"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "short",
+                        "color": {
+                            "mode": "value"
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 6,
+                    "x": 6,
+                    "y": 0
+                }
+            },
+            {
+                "id": 3,
+                "title": "New User Registrations (Last 24h)",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(increase(user_registrations_total[24h]))",
+                        "legendFormat": "New Users"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "short",
+                        "color": {
+                            "mode": "value"
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 6,
+                    "x": 12,
+                    "y": 0
+                }
+            },
+            {
+                "id": 4,
+                "title": "Active Users",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(active_users_current)",
+                        "legendFormat": "Active Users"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "unit": "short",
+                        "color": {
+                            "mode": "value"
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 6,
+                    "x": 18,
+                    "y": 0
+                }
+            },
+            {
+                "id": 5,
+                "title": "Revenue Trend",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(payment_successful_amount_total[1h]))",
+                        "legendFormat": "Revenue/hour"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "USD/hour",
+                        "min": 0
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 8
+                }
+            },
+            {
+                "id": 6,
+                "title": "Conversion Rate",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(orders_completed_total[1h])) / sum(rate(sessions_started_total[1h])) * 100",
+                        "legendFormat": "Conversion Rate %"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Percentage",
+                        "min": 0,
+                        "max": 10
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 8
+                }
+            },
+            {
+                "id": 7,
+                "title": "Service-Specific Metrics",
+                "type": "row",
+                "gridPos": {
+                    "h": 1,
+                    "w": 24,
+                    "x": 0,
+                    "y": 16
+                }
+            },
+            {
+                "id": 8,
+                "title": "Taxi Rides Completed",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(taxi_rides_completed_total[1h]))",
+                        "legendFormat": "Rides/hour"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 8,
+                    "x": 0,
+                    "y": 17
+                }
+            },
+            {
+                "id": 9,
+                "title": "Hotel Bookings",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(hotel_bookings_completed_total[1h]))",
+                        "legendFormat": "Bookings/hour"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 8,
+                    "x": 8,
+                    "y": 17
+                }
+            },
+            {
+                "id": 10,
+                "title": "Ad Click-Through Rate",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(ad_clicks_total[1h])) / sum(rate(ad_impressions_total[1h])) * 100",
+                        "legendFormat": "CTR %"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 8,
+                    "x": 16,
+                    "y": 17
+                }
+            },
+            {
+                "id": 11,
+                "title": "Payment Success Rate",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(payment_successful_total[5m])) / sum(rate(payment_attempts_total[5m])) * 100",
+                        "legendFormat": "Success Rate %"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Percentage",
+                        "min": 90,
+                        "max": 100
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 25
+                }
+            },
+            {
+                "id": 12,
+                "title": "Average Order Value",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(order_value_total[1h])) / sum(rate(orders_completed_total[1h]))",
+                        "legendFormat": "AOV"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "USD",
+                        "min": 0
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 25
+                }
+            }
+        ]
+    }
+}

@@ -57,7 +57,14 @@
     "docker:ps": "docker-compose ps",
     "health:check": "curl -f http://localhost:3000/health",
     "health:all": "for port in 3001 3002 3003 3004 3005 3006 3007 3008; do echo \"Port $port: $(curl -s http://localhost:$port/health | jq -r '.status // \"ERROR\"')\"; done",
-    "validate:all": "pnpm run lint && pnpm run test"
+    "validate:all": "pnpm run lint && pnpm run test",
+    "docs:generate": "node scripts/generate-docs.js",
+    "docs:typedoc": "typedoc",
+    "docs:jsdoc": "jsdoc -c jsdoc.json",
+    "docs:api": "node scripts/generate-api-docs.js",
+    "docs:serve": "cd docs/generated && python3 -m http.server 8080",
+    "docs:clean": "rm -rf docs/generated/*",
+    "docs:all": "pnpm run docs:clean && pnpm run docs:generate && pnpm run docs:typedoc"
   },
   "devDependencies": {
     "@types/http-status": "^0.2.30",

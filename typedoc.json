@@ -1,0 +1,125 @@
+{
+  "entryPoints": [
+    "services/*/src/index.ts",
+    "packages/common/src/index.ts"
+  ],
+  "out": "docs/generated/typedoc",
+  "theme": "default",
+  "name": "Multi-Service Platform API Documentation",
+  "includeVersion": true,
+  "excludeExternals": true,
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeInternal": true,
+  "readme": "docs/README.md",
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Services",
+    "Common",
+    "Types",
+    "Utilities",
+    "*"
+  ],
+  "sort": [
+    "source-order"
+  ],
+  "kindSortOrder": [
+    "Document",
+    "Project",
+    "Module",
+    "Namespace",
+    "Enum",
+    "EnumMember",
+    "Class",
+    "Interface",
+    "TypeAlias",
+    "Constructor",
+    "Property",
+    "Variable",
+    "Function",
+    "Accessor",
+    "Method",
+    "Parameter",
+    "TypeParameter",
+    "TypeLiteral",
+    "CallSignature",
+    "ConstructorSignature",
+    "IndexSignature",
+    "GetSignature",
+    "SetSignature"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**"
+  ],
+  "externalPattern": [
+    "**/node_modules/**"
+  ],
+  "plugin": [
+    "typedoc-plugin-markdown"
+  ],
+  "gitRevision": "main",
+  "gitRemote": "origin",
+  "gaID": "",
+  "hideGenerator": false,
+  "searchInComments": true,
+  "cleanOutputDir": true,
+  "treatWarningsAsErrors": false,
+  "validation": {
+    "notExported": true,
+    "invalidLink": true,
+    "notDocumented": false
+  },
+  "commentStyle": "jsdoc",
+  "blockTags": [
+    "@alpha",
+    "@beta",
+    "@defaultValue",
+    "@decorator",
+    "@deprecated",
+    "@eventProperty",
+    "@example",
+    "@experimental",
+    "@inheritDoc",
+    "@internal",
+    "@label",
+    "@override",
+    "@packageDocumentation",
+    "@param",
+    "@privateRemarks",
+    "@public",
+    "@readonly",
+    "@remarks",
+    "@returns",
+    "@sealed",
+    "@see",
+    "@since",
+    "@throws",
+    "@typeParam",
+    "@virtual"
+  ],
+  "inlineTags": [
+    "@inheritDoc",
+    "@label",
+    "@link",
+    "@linkcode",
+    "@linkplain"
+  ],
+  "modifierTags": [
+    "@alpha",
+    "@beta",
+    "@deprecated",
+    "@eventProperty",
+    "@experimental",
+    "@internal",
+    "@override",
+    "@packageDocumentation",
+    "@public",
+    "@readonly",
+    "@sealed",
+    "@virtual"
+  ]
+}

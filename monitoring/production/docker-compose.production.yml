@@ -1,0 +1,240 @@
+version: '3.8'
+
+services:
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    container_name: prometheus-prod
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus-production.yml:/etc/prometheus/prometheus.yml
+      - ./rules:/etc/prometheus/rules
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - monitoring
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=9090"
+
+  # Alertmanager
+  alertmanager:
+    image: prom/alertmanager:v0.25.0
+    container_name: alertmanager-prod
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager-production.yml:/etc/alertmanager/alertmanager.yml
+      - ./templates:/etc/alertmanager/templates
+      - alertmanager-data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=https://alertmanager.yourplatform.com'
+    networks:
+      - monitoring
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: grafana-prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=secure_admin_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana.yourplatform.com
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=smtp.gmail.com:587
+      - GF_SMTP_USER=alerts@yourplatform.com
+      - GF_SMTP_PASSWORD=your_app_password
+      - GF_SMTP_FROM_ADDRESS=alerts@yourplatform.com
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+  # Node Exporter
+  node-exporter:
+    image: prom/node-exporter:v1.6.0
+    container_name: node-exporter-prod
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - monitoring
+
+  # Blackbox Exporter for synthetic monitoring
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.24.0
+    container_name: blackbox-exporter-prod
+    restart: unless-stopped
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./synthetic/blackbox-config.yml:/etc/blackbox_exporter/config.yml
+    networks:
+      - monitoring
+
+  # Postgres Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.13.0
+    container_name: postgres-exporter-prod
+    restart: unless-stopped
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:password@postgres:5432/postgres?sslmode=disable
+    networks:
+      - monitoring
+    depends_on:
+      - postgres
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.52.0
+    container_name: redis-exporter-prod
+    restart: unless-stopped
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    networks:
+      - monitoring
+    depends_on:
+      - redis
+
+  # RabbitMQ Exporter
+  rabbitmq-exporter:
+    image: kbudde/rabbitmq-exporter:v1.0.0-RC19
+    container_name: rabbitmq-exporter-prod
+    restart: unless-stopped
+    ports:
+      - "9419:9419"
+    environment:
+      - RABBIT_URL=http://rabbitmq:15672
+      - RABBIT_USER=admin
+      - RABBIT_PASSWORD=admin
+      - PUBLISH_PORT=9419
+    networks:
+      - monitoring
+    depends_on:
+      - rabbitmq
+
+  # Elasticsearch Exporter
+  elasticsearch-exporter:
+    image: prometheuscommunity/elasticsearch-exporter:v1.5.0
+    container_name: elasticsearch-exporter-prod
+    restart: unless-stopped
+    ports:
+      - "9114:9114"
+    command:
+      - '--es.uri=http://elasticsearch:9200'
+      - '--es.all'
+      - '--es.indices'
+      - '--es.shards'
+    networks:
+      - monitoring
+    depends_on:
+      - elasticsearch
+
+  # Nginx Exporter
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:0.11.0
+    container_name: nginx-exporter-prod
+    restart: unless-stopped
+    ports:
+      - "9113:9113"
+    command:
+      - '-nginx.scrape-uri=http://nginx:8080/nginx_status'
+    networks:
+      - monitoring
+    depends_on:
+      - nginx
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:1.47
+    container_name: jaeger-prod
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - ES_SERVER_URLS=http://elasticsearch:9200
+    networks:
+      - monitoring
+    depends_on:
+      - elasticsearch
+
+  # Loki for log aggregation
+  loki:
+    image: grafana/loki:2.8.0
+    container_name: loki-prod
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yml:/etc/loki/local-config.yaml
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring
+
+  # Promtail for log collection
+  promtail:
+    image: grafana/promtail:2.8.0
+    container_name: promtail-prod
+    restart: unless-stopped
+    volumes:
+      - ./promtail-config.yml:/etc/promtail/config.yml
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+  loki-data:
+    driver: local
+
+networks:
+  monitoring:
+    driver: bridge
+    external: true

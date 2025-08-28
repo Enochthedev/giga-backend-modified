@@ -1,0 +1,37 @@
+{
+    "source": {
+        "include": [
+            "services/",
+            "packages/",
+            "scripts/"
+        ],
+        "includePattern": "\\.(js|ts)$",
+        "exclude": [
+            "node_modules/",
+            "dist/",
+            "build/",
+            "coverage/",
+            "**/*.test.js",
+            "**/*.test.ts",
+            "**/*.spec.js",
+            "**/*.spec.ts"
+        ]
+    },
+    "opts": {
+        "destination": "docs/generated/jsdoc/",
+        "recurse": true,
+        "readme": "docs/README.md"
+    },
+    "plugins": [
+        "plugins/markdown",
+        "plugins/summarize"
+    ],
+    "templates": {
+        "cleverLinks": false,
+        "monospaceLinks": false
+    },
+    "markdown": {
+        "parser": "gfm",
+        "hardwrap": false
+    }
+}

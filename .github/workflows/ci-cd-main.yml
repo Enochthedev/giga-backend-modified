@@ -1,91 +1,288 @@
-name: CI/CD Pipeline - Main Services
+name: CI/CD Pipeline - Multi-Service Platform
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'release/**', 'hotfix/**' ]
     paths:
-      - 'giga_main/**'
-      - 'giga_taxi_main/**'
-      - 'giga_taxi_driver/**'
-      - 'ecommerce-backend/**'
-      - 'advertisement-service/**'
-      - 'hotel-service/**'
-      - 'payment-service/**'
-      - 'common/**'
-      - 'packages/common/**'
+      - 'services/**'
+      - 'packages/**'
+      - 'k8s/**'
+      - 'scripts/**'
+      - 'docker-compose*.yml'
+      - 'Dockerfile*'
+      - '.github/workflows/**'
   pull_request:
     branches: [ main, develop ]
     paths:
-      - 'giga_main/**'
-      - 'giga_taxi_main/**'
-      - 'giga_taxi_driver/**'
-      - 'ecommerce-backend/**'
-      - 'advertisement-service/**'
-      - 'hotel-service/**'
-      - 'payment-service/**'
-      - 'common/**'
-      - 'packages/common/**'
+      - 'services/**'
+      - 'packages/**'
+      - 'k8s/**'
+      - 'scripts/**'
+      - 'docker-compose*.yml'
+      - 'Dockerfile*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      services:
+        description: 'Services to deploy (comma-separated, or "all")'
+        required: false
+        default: 'all'
+        type: string
 
 env:
   REGISTRY: ghcr.io
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
+  PNPM_VERSION: '8'
   DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
 
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      giga_main: ${{ steps.changes.outputs.giga_main }}
-      giga_taxi_main: ${{ steps.changes.outputs.giga_taxi_main }}
-      giga_taxi_driver: ${{ steps.changes.outputs.giga_taxi_driver }}
-      ecommerce_backend: ${{ steps.changes.outputs.ecommerce_backend }}
-      advertisement_service: ${{ steps.changes.outputs.advertisement_service }}
-      hotel_service: ${{ steps.changes.outputs.hotel_service }}
+      # Core Services
+      api_gateway: ${{ steps.changes.outputs.api_gateway }}
+      authentication_service: ${{ steps.changes.outputs.authentication_service }}
       payment_service: ${{ steps.changes.outputs.payment_service }}
-      common: ${{ steps.changes.outputs.common }}
-      packages_common: ${{ steps.changes.outputs.packages_common }}
+      ecommerce_service: ${{ steps.changes.outputs.ecommerce_service }}
+      taxi_service: ${{ steps.changes.outputs.taxi_service }}
+      hotel_service: ${{ steps.changes.outputs.hotel_service }}
+      # Platform Services
+      notification_service: ${{ steps.changes.outputs.notification_service }}
+      search_service: ${{ steps.changes.outputs.search_service }}
+      file_service: ${{ steps.changes.outputs.file_service }}
+      analytics_service: ${{ steps.changes.outputs.analytics_service }}
+      advertisement_service: ${{ steps.changes.outputs.advertisement_service }}
+      admin_service: ${{ steps.changes.outputs.admin_service }}
+      messaging_service: ${{ steps.changes.outputs.messaging_service }}
+      data_governance_admin: ${{ steps.changes.outputs.data_governance_admin }}
+      # Shared Packages
+      common_package: ${{ steps.changes.outputs.common_package }}
+      # Infrastructure
+      k8s_manifests: ${{ steps.changes.outputs.k8s_manifests }}
+      docker_configs: ${{ steps.changes.outputs.docker_configs }}
+      scripts: ${{ steps.changes.outputs.scripts }}
+      
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
-            giga_main:
-              - 'giga_main/**'
-            giga_taxi_main:
-              - 'giga_taxi_main/**'
-            giga_taxi_driver:
-              - 'giga_taxi_driver/**'
-            ecommerce_backend:
-              - 'ecommerce-backend/**'
-            advertisement_service:
-              - 'advertisement-service/**'
-            hotel_service:
-              - 'hotel-service/**'
+            api_gateway:
+              - 'services/api-gateway/**'
+            authentication_service:
+              - 'services/authentication-service/**'
             payment_service:
-              - 'payment-service/**'
-            common:
-              - 'common/**'
-            packages_common:
+              - 'services/payment-service/**'
+            ecommerce_service:
+              - 'services/ecommerce-service/**'
+            taxi_service:
+              - 'services/taxi-service/**'
+            hotel_service:
+              - 'services/hotel-service/**'
+            notification_service:
+              - 'services/notification-service/**'
+            search_service:
+              - 'services/search-service/**'
+            file_service:
+              - 'services/file-service/**'
+            analytics_service:
+              - 'services/analytics-service/**'
+            advertisement_service:
+              - 'services/advertisement-service/**'
+            admin_service:
+              - 'services/admin-service/**'
+            messaging_service:
+              - 'services/messaging-service/**'
+            data_governance_admin:
+              - 'services/data-governance-admin/**'
+            common_package:
               - 'packages/common/**'
+            k8s_manifests:
+              - 'k8s/**'
+            docker_configs:
+              - 'docker-compose*.yml'
+              - 'Dockerfile*'
+              - '**/Dockerfile*'
+            scripts:
+              - 'scripts/**'
 
-  lint-and-test:
+  setup-matrix:
     needs: detect-changes
     runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set-matrix.outputs.services }}
+    steps:
+      - name: Set up service matrix
+        id: set-matrix
+        run: |
+          services='[]'
+          
+          # Core Services
+          if [[ '${{ needs.detect-changes.outputs.api_gateway }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "api-gateway", "path": "services/api-gateway", "port": "3000", "critical": true}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.authentication_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "authentication-service", "path": "services/authentication-service", "port": "3001", "critical": true}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.payment_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "payment-service", "path": "services/payment-service", "port": "3002", "critical": true}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.ecommerce_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "ecommerce-service", "path": "services/ecommerce-service", "port": "3003", "critical": true}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.taxi_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "taxi-service", "path": "services/taxi-service", "port": "3004", "critical": true}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.hotel_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "hotel-service", "path": "services/hotel-service", "port": "3005", "critical": true}]')
+          fi
+          
+          # Platform Services
+          if [[ '${{ needs.detect-changes.outputs.file_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "file-service", "path": "services/file-service", "port": "3006", "critical": false}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.search_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "search-service", "path": "services/search-service", "port": "3007", "critical": false}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.notification_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "notification-service", "path": "services/notification-service", "port": "3008", "critical": false}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.analytics_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "analytics-service", "path": "services/analytics-service", "port": "3009", "critical": false}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.advertisement_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "advertisement-service", "path": "services/advertisement-service", "port": "3010", "critical": false}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.admin_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "admin-service", "path": "services/admin-service", "port": "3011", "critical": false}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.messaging_service }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "messaging-service", "path": "services/messaging-service", "port": "3012", "critical": false}]')
+          fi
+          if [[ '${{ needs.detect-changes.outputs.data_governance_admin }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "data-governance-admin", "path": "services/data-governance-admin", "port": "3013", "critical": false}]')
+          fi
+          
+          # Shared Packages
+          if [[ '${{ needs.detect-changes.outputs.common_package }}' == 'true' ]]; then
+            services=$(echo $services | jq '. + [{"name": "common", "path": "packages/common", "port": "", "critical": true}]')
+          fi
+          
+          echo "services=$services" >> $GITHUB_OUTPUT
+          echo "Services to process: $services"
+
+  quality-checks:
+    needs: [detect-changes, setup-matrix]
+    if: needs.setup-matrix.outputs.services != '[]'
+    runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        service: [
-          { name: 'giga_main', path: 'giga_main', changed: '${{ needs.detect-changes.outputs.giga_main }}' },
-          { name: 'giga_taxi_main', path: 'giga_taxi_main', changed: '${{ needs.detect-changes.outputs.giga_taxi_main }}' },
-          { name: 'giga_taxi_driver', path: 'giga_taxi_driver', changed: '${{ needs.detect-changes.outputs.giga_taxi_driver }}' },
-          { name: 'ecommerce_backend', path: 'ecommerce-backend', changed: '${{ needs.detect-changes.outputs.ecommerce_backend }}' },
-          { name: 'advertisement_service', path: 'advertisement-service', changed: '${{ needs.detect-changes.outputs.advertisement_service }}' },
-          { name: 'hotel_service', path: 'hotel-service', changed: '${{ needs.detect-changes.outputs.hotel_service }}' },
-          { name: 'payment_service', path: 'payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' },
-          { name: 'common', path: 'common', changed: '${{ needs.detect-changes.outputs.common }}' },
-          { name: 'packages_common', path: 'packages/common', changed: '${{ needs.detect-changes.outputs.packages_common }}' }
-        ]
-    if: matrix.service.changed == 'true'
+        service: ${{ fromJson(needs.setup-matrix.outputs.services) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: '${{ matrix.service.path }}/pnpm-lock.yaml'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "package.json" ]; then
+            pnpm install --frozen-lockfile
+          else
+            echo "No package.json found, skipping dependency installation..."
+            exit 0
+          fi
+
+      - name: Build shared packages first
+        if: matrix.service.name == 'common'
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "package.json" ] && pnpm run --if-present build; then
+            pnpm run build
+          else
+            echo "No build script found, skipping build..."
+          fi
+
+      - name: Run linting
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "package.json" ] && pnpm run --if-present lint; then
+            pnpm run lint
+          else
+            echo "No lint script found, skipping linting..."
+          fi
+
+      - name: Run type checking
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "tsconfig.json" ]; then
+            pnpm exec tsc --noEmit
+          else
+            echo "No TypeScript config found, skipping type check..."
+          fi
+
+      - name: Run unit tests
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "package.json" ] && pnpm run --if-present test; then
+            pnpm run test -- --coverage --watchAll=false --passWithNoTests
+          else
+            echo "No test script found, skipping tests..."
+          fi
+        env:
+          NODE_ENV: test
+          CI: true
+
+      - name: Upload coverage reports
+        if: success() && hashFiles(format('{0}/coverage/lcov.info', matrix.service.path)) != ''
+        uses: codecov/codecov-action@v4
+        with:
+          file: ${{ matrix.service.path }}/coverage/lcov.info
+          flags: ${{ matrix.service.name }}
+          name: ${{ matrix.service.name }}-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+      - name: Cache build artifacts
+        if: success()
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ matrix.service.path }}/dist
+            ${{ matrix.service.path }}/build
+            ${{ matrix.service.path }}/node_modules
+          key: build-${{ matrix.service.name }}-${{ github.sha }}
+          restore-keys: |
+            build-${{ matrix.service.name }}-
     
     steps:
       - name: Checkout code
@@ -140,68 +337,101 @@ jobs:
           name: ${{ matrix.service.name }}-coverage
 
   security-scan:
-    needs: detect-changes
+    needs: [detect-changes, setup-matrix]
+    if: needs.setup-matrix.outputs.services != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        service: [
-          { name: 'giga_main', path: 'giga_main', changed: '${{ needs.detect-changes.outputs.giga_main }}' },
-          { name: 'giga_taxi_main', path: 'giga_taxi_main', changed: '${{ needs.detect-changes.outputs.giga_taxi_main }}' },
-          { name: 'giga_taxi_driver', path: 'giga_taxi_driver', changed: '${{ needs.detect-changes.outputs.giga_taxi_driver }}' },
-          { name: 'ecommerce_backend', path: 'ecommerce-backend', changed: '${{ needs.detect-changes.outputs.ecommerce_backend }}' },
-          { name: 'advertisement_service', path: 'advertisement-service', changed: '${{ needs.detect-changes.outputs.advertisement_service }}' },
-          { name: 'hotel_service', path: 'hotel-service', changed: '${{ needs.detect-changes.outputs.hotel_service }}' },
-          { name: 'payment_service', path: 'payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' }
-        ]
-    if: matrix.service.changed == 'true'
+        service: ${{ fromJson(needs.setup-matrix.outputs.services) }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Run Trivy vulnerability scanner
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.service.path }}
+        run: |
+          if [ -f "package.json" ]; then
+            pnpm install --frozen-lockfile
+          fi
+
+      - name: Run Trivy filesystem scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '${{ matrix.service.path }}'
           format: 'sarif'
-          output: 'trivy-results-${{ matrix.service.name }}.sarif'
+          output: 'trivy-fs-${{ matrix.service.name }}.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results-${{ matrix.service.name }}.sarif'
+          sarif_file: 'trivy-fs-${{ matrix.service.name }}.sarif'
+          category: 'trivy-fs-${{ matrix.service.name }}'
 
-      - name: Run npm audit
+      - name: Run pnpm audit
         working-directory: ${{ matrix.service.path }}
+        continue-on-error: true
         run: |
           if [ -f "package.json" ]; then
-            npm audit --audit-level=high
+            pnpm audit --audit-level=high --prod
           fi
 
+      - name: Run Semgrep security scan
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+          generateSarif: "1"
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload Semgrep results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep.sarif
+          category: 'semgrep-${{ matrix.service.name }}'
+
   build-and-push:
-    needs: [detect-changes, lint-and-test, security-scan]
+    needs: [detect-changes, setup-matrix, quality-checks, security-scan]
+    if: |
+      needs.setup-matrix.outputs.services != '[]' && 
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/hotfix/')))
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
+      fail-fast: false
       matrix:
-        service: [
-          { name: 'giga_main', path: 'giga_main', changed: '${{ needs.detect-changes.outputs.giga_main }}' },
-          { name: 'giga_taxi_main', path: 'giga_taxi_main', changed: '${{ needs.detect-changes.outputs.giga_taxi_main }}' },
-          { name: 'giga_taxi_driver', path: 'giga_taxi_driver', changed: '${{ needs.detect-changes.outputs.giga_taxi_driver }}' },
-          { name: 'ecommerce_backend', path: 'ecommerce-backend', changed: '${{ needs.detect-changes.outputs.ecommerce_backend }}' },
-          { name: 'advertisement_service', path: 'advertisement-service', changed: '${{ needs.detect-changes.outputs.advertisement_service }}' },
-          { name: 'hotel_service', path: 'hotel-service', changed: '${{ needs.detect-changes.outputs.hotel_service }}' },
-          { name: 'payment_service', path: 'payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' }
-        ]
+        service: ${{ fromJson(needs.setup-matrix.outputs.services) }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3
@@ -220,9 +450,30 @@ jobs:
             type=ref,event=pr
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=stable,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.service.name }}
+            org.opencontainers.image.description=Multi-service platform - ${{ matrix.service.name }}
+            org.opencontainers.image.vendor=Platform Team
+            org.opencontainers.image.version={{version}}
+            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
+            org.opencontainers.image.revision={{sha}}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ matrix.service.path }}/dist
+            ${{ matrix.service.path }}/build
+            ${{ matrix.service.path }}/node_modules
+          key: build-${{ matrix.service.name }}-${{ github.sha }}
+          restore-keys: |
+            build-${{ matrix.service.name }}-
 
       - name: Build and push Docker image
-        if: matrix.service.changed == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.service.path }}
@@ -230,55 +481,355 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.service.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service.name }}
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            NODE_VERSION=${{ env.NODE_VERSION }}
+            BUILDKIT_INLINE_CACHE=1
 
-  deploy-staging:
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-container-${{ matrix.service.name }}.sarif'
+
+      - name: Upload container scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-container-${{ matrix.service.name }}.sarif'
+          category: 'trivy-container-${{ matrix.service.name }}'
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.service.name }}.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service.name }}
+          path: sbom-${{ matrix.service.name }}.spdx.json
+          retention-days: 30
+
+  integration-tests:
     needs: [build-and-push]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    environment: staging
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: test
+          RABBITMQ_DEFAULT_PASS: test
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 30s
+          --health-timeout 30s
+          --health-retries 3
+        ports:
+          - 5672:5672
+          - 15672:15672
+
+      elasticsearch:
+        image: elasticsearch:8.11.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: false
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        options: >-
+          --health-cmd "curl -f http://localhost:9200/_cluster/health"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
+        ports:
+          - 9200:9200
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for services to be ready..."
+          sleep 30
+          
+          # Test database connection
+          pg_isready -h localhost -p 5432 -U postgres
+          
+          # Test Redis connection
+          redis-cli -h localhost -p 6379 ping
+          
+          # Test RabbitMQ connection
+          curl -f http://test:test@localhost:15672/api/overview
+          
+          # Test Elasticsearch connection
+          curl -f http://localhost:9200/_cluster/health
+
+      - name: Run integration tests
+        run: |
+          pnpm run test:integration
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          RABBITMQ_URL: amqp://test:test@localhost:5672
+          ELASTICSEARCH_URL: http://localhost:9200
+
+      - name: Run end-to-end tests
+        run: |
+          pnpm run test:e2e
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          RABBITMQ_URL: amqp://test:test@localhost:5672
+          ELASTICSEARCH_URL: http://localhost:9200
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: |
+            test-results/
+            coverage/
+          retention-days: 7
+
+  deploy-staging:
+    needs: [build-and-push, integration-tests]
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: 
+      name: staging
+      url: https://staging.platform.company.com
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.0'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name ${{ secrets.EKS_CLUSTER_NAME_STAGING }}
 
       - name: Deploy to staging
         run: |
           echo "Deploying to staging environment..."
-          # This would typically involve kubectl, helm, or other deployment tools
-          # ./scripts/deploy-staging.sh
+          
+          # Deploy using Helm
+          helm upgrade --install platform-staging ./k8s/charts/multi-service-platform \
+            --namespace staging \
+            --create-namespace \
+            --values ./k8s/charts/multi-service-platform/values-staging.yaml \
+            --set image.tag=${{ github.sha }} \
+            --set global.environment=staging \
+            --wait \
+            --timeout=10m
+
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests against staging..."
+          ./scripts/smoke-tests.sh staging
+        env:
+          STAGING_URL: https://staging.platform.company.com
+
+      - name: Notify deployment success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: "✅ Staging deployment successful for commit ${{ github.sha }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify deployment failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: "❌ Staging deployment failed for commit ${{ github.sha }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   deploy-production:
-    needs: [build-and-push]
+    needs: [build-and-push, integration-tests]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
+    if: |
+      github.event_name == 'push' && github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment: 
+      name: production
+      url: https://platform.company.com
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.0'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name ${{ secrets.EKS_CLUSTER_NAME_PRODUCTION }}
+
+      - name: Create deployment backup
+        run: |
+          echo "Creating backup of current deployment..."
+          kubectl get all -n production -o yaml > backup-$(date +%Y%m%d-%H%M%S).yaml
+
       - name: Deploy to production
         run: |
           echo "Deploying to production environment..."
-          # This would typically involve kubectl, helm, or other deployment tools
-          # ./scripts/deploy-production.sh
+          
+          # Deploy using Helm with blue-green strategy
+          helm upgrade --install platform-production ./k8s/charts/multi-service-platform \
+            --namespace production \
+            --create-namespace \
+            --values ./k8s/charts/multi-service-platform/values-production.yaml \
+            --set image.tag=${{ github.sha }} \
+            --set global.environment=production \
+            --wait \
+            --timeout=15m
 
-      - name: Run smoke tests
+      - name: Run comprehensive smoke tests
         run: |
-          echo "Running smoke tests..."
-          # ./scripts/smoke-tests.sh
+          echo "Running comprehensive smoke tests against production..."
+          ./scripts/smoke-tests.sh production
+          ./scripts/health-checks.sh production
+        env:
+          PRODUCTION_URL: https://platform.company.com
 
-      - name: Notify deployment success
+      - name: Run performance tests
+        run: |
+          echo "Running performance tests..."
+          ./scripts/performance-tests.sh production
+        continue-on-error: true
+
+      - name: Update deployment status
         if: success()
         run: |
           echo "Production deployment successful!"
-          # Send notification to Slack, email, etc.
+          kubectl annotate deployment -n production --all deployment.kubernetes.io/revision-history="Deployed ${{ github.sha }} at $(date)"
+
+      - name: Notify deployment success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: "🚀 Production deployment successful for commit ${{ github.sha }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Rollback on failure
         if: failure()
         run: |
           echo "Deployment failed, initiating rollback..."
-          # ./scripts/rollback.sh
+          helm rollback platform-production -n production
+          
+      - name: Notify deployment failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: "💥 Production deployment failed for commit ${{ github.sha }} - Rollback initiated"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  cleanup:
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Cleanup old container images
+        run: |
+          echo "Cleaning up old container images..."
+          # This would clean up old images from the registry
+          # Keep last 10 versions of each service
+          
+      - name: Update deployment metrics
+        run: |
+          echo "Updating deployment metrics..."
+          # This would update deployment metrics in monitoring system

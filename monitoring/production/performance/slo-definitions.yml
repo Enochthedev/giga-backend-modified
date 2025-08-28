@@ -1,0 +1,189 @@
+# Service Level Objectives (SLO) Definitions
+# These SLOs define the performance targets for our production services
+
+slos:
+  # API Gateway SLOs
+  api_gateway:
+    availability:
+      target: 99.9%
+      measurement_window: 30d
+      error_budget: 0.1%
+      sli_query: 'sum(rate(http_requests_total{job="api-gateway",status!~"5.."}[5m])) / sum(rate(http_requests_total{job="api-gateway"}[5m]))'
+    
+    latency:
+      target: 95% of requests < 500ms
+      measurement_window: 30d
+      sli_query: 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="api-gateway"}[5m])) by (le))'
+    
+    throughput:
+      target: Handle 10,000 requests/minute
+      measurement_window: 1h
+      sli_query: 'sum(rate(http_requests_total{job="api-gateway"}[1m])) * 60'
+
+  # Authentication Service SLOs
+  authentication_service:
+    availability:
+      target: 99.95%
+      measurement_window: 30d
+      error_budget: 0.05%
+      sli_query: 'sum(rate(http_requests_total{job="authentication-service",status!~"5.."}[5m])) / sum(rate(http_requests_total{job="authentication-service"}[5m]))'
+    
+    latency:
+      target: 95% of requests < 200ms
+      measurement_window: 30d
+      sli_query: 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="authentication-service"}[5m])) by (le))'
+    
+    login_success_rate:
+      target: 98% of valid login attempts succeed
+      measurement_window: 24h
+      sli_query: 'sum(rate(auth_login_success_total[5m])) / sum(rate(auth_login_attempts_total[5m]))'
+
+  # Payment Service SLOs
+  payment_service:
+    availability:
+      target: 99.99%
+      measurement_window: 30d
+      error_budget: 0.01%
+      sli_query: 'sum(rate(http_requests_total{job="payment-service",status!~"5.."}[5m])) / sum(rate(http_requests_total{job="payment-service"}[5m]))'
+    
+    latency:
+      target: 95% of requests < 2s
+      measurement_window: 30d
+      sli_query: 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="payment-service"}[5m])) by (le))'
+    
+    payment_success_rate:
+      target: 99% of payment attempts succeed
+      measurement_window: 24h
+      sli_query: 'sum(rate(payment_successful_total[5m])) / sum(rate(payment_attempts_total[5m]))'
+
+  # Ecommerce Service SLOs
+  ecommerce_service:
+    availability:
+      target: 99.9%
+      measurement_window: 30d
+      error_budget: 0.1%
+      sli_query: 'sum(rate(http_requests_total{job="ecommerce-service",status!~"5.."}[5m])) / sum(rate(http_requests_total{job="ecommerce-service"}[5m]))'
+    
+    latency:
+      target: 95% of requests < 1s
+      measurement_window: 30d
+      sli_query: 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="ecommerce-service"}[5m])) by (le))'
+    
+    search_latency:
+      target: 95% of search requests < 500ms
+      measurement_window: 24h
+      sli_query: 'histogram_quantile(0.95, sum(rate(search_query_duration_seconds_bucket[5m])) by (le))'
+
+  # Hotel Service SLOs
+  hotel_service:
+    availability:
+      target: 99.9%
+      measurement_window: 30d
+      error_budget: 0.1%
+      sli_query: 'sum(rate(http_requests_total{job="hotel-service",status!~"5.."}[5m])) / sum(rate(http_requests_total{job="hotel-service"}[5m]))'
+    
+    latency:
+      target: 95% of requests < 1s
+      measurement_window: 30d
+      sli_query: 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="hotel-service"}[5m])) by (le))'
+    
+    booking_success_rate:
+      target: 95% of booking attempts succeed
+      measurement_window: 24h
+      sli_query: 'sum(rate(hotel_booking_success_total[5m])) / sum(rate(hotel_booking_attempts_total[5m]))'
+
+  # Taxi Service SLOs
+  taxi_service:
+    availability:
+      target: 99.9%
+      measurement_window: 30d
+      error_budget: 0.1%
+      sli_query: 'sum(rate(http_requests_total{job="taxi-service",status!~"5.."}[5m])) / sum(rate(http_requests_total{job="taxi-service"}[5m]))'
+    
+    latency:
+      target: 95% of requests < 1s
+      measurement_window: 30d
+      sli_query: 'histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job="taxi-service"}[5m])) by (le))'
+    
+    ride_matching_time:
+      target: 90% of rides matched within 2 minutes
+      measurement_window: 24h
+      sli_query: 'histogram_quantile(0.90, sum(rate(taxi_ride_matching_duration_seconds_bucket[5m])) by (le))'
+
+  # Database SLOs
+  database:
+    availability:
+      target: 99.99%
+      measurement_window: 30d
+      error_budget: 0.01%
+      sli_query: 'up{job="postgres-exporter"}'
+    
+    query_performance:
+      target: 95% of queries < 100ms
+      measurement_window: 24h
+      sli_query: 'histogram_quantile(0.95, sum(rate(pg_stat_statements_mean_time_seconds_bucket[5m])) by (le))'
+    
+    connection_utilization:
+      target: Connection pool < 80% utilized
+      measurement_window: 1h
+      sli_query: 'pg_stat_database_numbackends / pg_settings_max_connections'
+
+  # Cache SLOs
+  cache:
+    availability:
+      target: 99.9%
+      measurement_window: 30d
+      error_budget: 0.1%
+      sli_query: 'up{job="redis-exporter"}'
+    
+    hit_rate:
+      target: Cache hit rate > 90%
+      measurement_window: 24h
+      sli_query: 'redis_keyspace_hits / (redis_keyspace_hits + redis_keyspace_misses)'
+    
+    latency:
+      target: 95% of operations < 1ms
+      measurement_window: 24h
+      sli_query: 'histogram_quantile(0.95, sum(rate(redis_command_duration_seconds_bucket[5m])) by (le))'
+
+# Error Budget Policies
+error_budget_policies:
+  - name: "Fast Burn"
+    condition: "error_rate > 10 * error_budget_rate"
+    action: "Page on-call immediately"
+    
+  - name: "Slow Burn"
+    condition: "error_rate > 2 * error_budget_rate for 1h"
+    action: "Create incident ticket"
+    
+  - name: "Budget Exhausted"
+    condition: "error_budget_remaining < 10%"
+    action: "Freeze non-critical deployments"
+
+# SLO Alerting Rules
+alerting_rules:
+  - name: "SLO Burn Rate Fast"
+    expr: |
+      (
+        sum(rate(http_requests_total{status=~"5.."}[1m])) /
+        sum(rate(http_requests_total[1m]))
+      ) > (14.4 * 0.001)  # 14.4x burn rate for 99.9% SLO
+    for: 2m
+    labels:
+      severity: critical
+      slo_type: availability
+    annotations:
+      summary: "Fast SLO burn rate detected"
+      
+  - name: "SLO Burn Rate Slow"
+    expr: |
+      (
+        sum(rate(http_requests_total{status=~"5.."}[5m])) /
+        sum(rate(http_requests_total[5m]))
+      ) > (6 * 0.001)  # 6x burn rate for 99.9% SLO
+    for: 15m
+    labels:
+      severity: warning
+      slo_type: availability
+    annotations:
+      summary: "Slow SLO burn rate detected"

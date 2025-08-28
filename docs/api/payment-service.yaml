@@ -1,0 +1,695 @@
+openapi: 3.0.3
+info:
+  title: Payment Service API
+  description: |
+    Payment processing service with multi-gateway support.
+    Handles payments, refunds, payouts, and integrates with multiple payment providers.
+  version: 1.0.0
+  contact:
+    name: Platform Team
+    email: platform@company.com
+
+servers:
+  - url: http://localhost:3002
+    description: Development server
+  - url: https://api-staging.company.com/payments
+    description: Staging server
+  - url: https://api.company.com/payments
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /payment-methods:
+    get:
+      summary: Get user's payment methods
+      tags: [Payment Methods]
+      responses:
+        '200':
+          description: Payment methods retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMethod'
+
+    post:
+      summary: Add new payment method
+      tags: [Payment Methods]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddPaymentMethodRequest'
+      responses:
+        '201':
+          description: Payment method added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethod'
+        '400':
+          description: Invalid payment method data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /payment-methods/{methodId}:
+    delete:
+      summary: Remove payment method
+      tags: [Payment Methods]
+      parameters:
+        - name: methodId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payment method ID
+      responses:
+        '200':
+          description: Payment method removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '404':
+          description: Payment method not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /payments:
+    post:
+      summary: Process a payment
+      tags: [Payments]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Payment processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          description: Invalid payment data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: Payment failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentFailureResponse'
+
+    get:
+      summary: Get payment history
+      tags: [Payments]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, completed, failed, refunded]
+      responses:
+        '200':
+          description: Payment history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentHistoryResponse'
+
+  /payments/{paymentId}:
+    get:
+      summary: Get payment details
+      tags: [Payments]
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payment ID
+      responses:
+        '200':
+          description: Payment details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /payments/{paymentId}/refund:
+    post:
+      summary: Refund a payment
+      tags: [Refunds]
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payment ID to refund
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+      responses:
+        '200':
+          description: Refund processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundResponse'
+        '400':
+          description: Invalid refund request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /refunds:
+    get:
+      summary: Get refund history
+      tags: [Refunds]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Refund history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefundHistoryResponse'
+
+  /webhooks/stripe:
+    post:
+      summary: Stripe webhook endpoint
+      tags: [Webhooks]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed successfully
+        '400':
+          description: Invalid webhook data
+
+  /webhooks/paypal:
+    post:
+      summary: PayPal webhook endpoint
+      tags: [Webhooks]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Webhook processed successfully
+        '400':
+          description: Invalid webhook data
+
+  /payouts:
+    post:
+      summary: Create payout to vendor
+      tags: [Payouts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PayoutRequest'
+      responses:
+        '200':
+          description: Payout created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutResponse'
+        '400':
+          description: Invalid payout data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      summary: Get payout history
+      tags: [Payouts]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Payout history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PayoutHistoryResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+
+    PaymentMethod:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "pm_123456"
+        type:
+          type: string
+          enum: [card, bank_account, digital_wallet]
+          example: "card"
+        provider:
+          type: string
+          enum: [stripe, paypal, flutterwave, paystack]
+          example: "stripe"
+        last4:
+          type: string
+          example: "4242"
+        brand:
+          type: string
+          example: "visa"
+        expiryMonth:
+          type: integer
+          example: 12
+        expiryYear:
+          type: integer
+          example: 2025
+        isDefault:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+
+    AddPaymentMethodRequest:
+      type: object
+      required:
+        - type
+        - provider
+        - token
+      properties:
+        type:
+          type: string
+          enum: [card, bank_account, digital_wallet]
+          example: "card"
+        provider:
+          type: string
+          enum: [stripe, paypal, flutterwave, paystack]
+          example: "stripe"
+        token:
+          type: string
+          example: "tok_123456"
+        isDefault:
+          type: boolean
+          default: false
+
+    PaymentRequest:
+      type: object
+      required:
+        - amount
+        - currency
+        - paymentMethodId
+        - orderId
+      properties:
+        amount:
+          type: number
+          example: 99.99
+        currency:
+          type: string
+          example: "USD"
+        paymentMethodId:
+          type: string
+          example: "pm_123456"
+        orderId:
+          type: string
+          example: "order_123456"
+        description:
+          type: string
+          example: "Payment for order #123456"
+        metadata:
+          type: object
+          additionalProperties: true
+
+    PaymentResponse:
+      type: object
+      properties:
+        payment:
+          $ref: '#/components/schemas/Payment'
+        message:
+          type: string
+          example: "Payment processed successfully"
+
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "pay_123456"
+        amount:
+          type: number
+          example: 99.99
+        currency:
+          type: string
+          example: "USD"
+        status:
+          type: string
+          enum: [pending, completed, failed, refunded]
+          example: "completed"
+        paymentMethodId:
+          type: string
+          example: "pm_123456"
+        orderId:
+          type: string
+          example: "order_123456"
+        description:
+          type: string
+          example: "Payment for order #123456"
+        provider:
+          type: string
+          example: "stripe"
+        providerTransactionId:
+          type: string
+          example: "pi_123456"
+        fees:
+          type: number
+          example: 3.29
+        netAmount:
+          type: number
+          example: 96.70
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PaymentFailureResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "PAYMENT_FAILED"
+        message:
+          type: string
+          example: "Your card was declined"
+        code:
+          type: string
+          example: "card_declined"
+        declineCode:
+          type: string
+          example: "insufficient_funds"
+        payment:
+          $ref: '#/components/schemas/Payment'
+
+    PaymentHistoryResponse:
+      type: object
+      properties:
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+
+    RefundRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+          example: 50.00
+          description: "Partial refund amount (optional, full refund if not specified)"
+        reason:
+          type: string
+          example: "Customer requested refund"
+
+    RefundResponse:
+      type: object
+      properties:
+        refund:
+          $ref: '#/components/schemas/Refund'
+        message:
+          type: string
+          example: "Refund processed successfully"
+
+    Refund:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "ref_123456"
+        paymentId:
+          type: string
+          example: "pay_123456"
+        amount:
+          type: number
+          example: 50.00
+        currency:
+          type: string
+          example: "USD"
+        status:
+          type: string
+          enum: [pending, completed, failed]
+          example: "completed"
+        reason:
+          type: string
+          example: "Customer requested refund"
+        provider:
+          type: string
+          example: "stripe"
+        providerRefundId:
+          type: string
+          example: "re_123456"
+        createdAt:
+          type: string
+          format: date-time
+
+    RefundHistoryResponse:
+      type: object
+      properties:
+        refunds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Refund'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+
+    PayoutRequest:
+      type: object
+      required:
+        - vendorId
+        - amount
+        - currency
+      properties:
+        vendorId:
+          type: string
+          example: "vendor_123456"
+        amount:
+          type: number
+          example: 500.00
+        currency:
+          type: string
+          example: "USD"
+        description:
+          type: string
+          example: "Weekly payout for vendor sales"
+
+    PayoutResponse:
+      type: object
+      properties:
+        payout:
+          $ref: '#/components/schemas/Payout'
+        message:
+          type: string
+          example: "Payout created successfully"
+
+    Payout:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "payout_123456"
+        vendorId:
+          type: string
+          example: "vendor_123456"
+        amount:
+          type: number
+          example: 500.00
+        currency:
+          type: string
+          example: "USD"
+        status:
+          type: string
+          enum: [pending, completed, failed]
+          example: "pending"
+        description:
+          type: string
+          example: "Weekly payout for vendor sales"
+        provider:
+          type: string
+          example: "stripe"
+        providerPayoutId:
+          type: string
+          example: "po_123456"
+        createdAt:
+          type: string
+          format: date-time
+
+    PayoutHistoryResponse:
+      type: object
+      properties:
+        payouts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payout'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 150
+        totalPages:
+          type: integer
+          example: 8
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "Operation completed successfully"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Invalid input data"
+        details:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+          example: "trace_123456"
+
+tags:
+  - name: Health
+    description: Service health endpoints
+  - name: Payment Methods
+    description: Payment method management
+  - name: Payments
+    description: Payment processing
+  - name: Refunds
+    description: Refund management
+  - name: Payouts
+    description: Vendor payout management
+  - name: Webhooks
+    description: Payment provider webhooks

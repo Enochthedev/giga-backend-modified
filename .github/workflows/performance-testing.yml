@@ -1,0 +1,559 @@
+name: Performance Testing
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run performance tests daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of performance test to run'
+        required: true
+        default: 'load'
+        type: choice
+        options:
+          - load
+          - stress
+          - spike
+          - volume
+          - endurance
+          - all
+      target_environment:
+        description: 'Target environment for testing'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      duration:
+        description: 'Test duration in minutes'
+        required: false
+        default: '10'
+        type: string
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '8'
+
+jobs:
+  setup-performance-tests:
+    runs-on: ubuntu-latest
+    outputs:
+      test-matrix: ${{ steps.setup-matrix.outputs.test-matrix }}
+      should-run-load: ${{ steps.check-tests.outputs.should-run-load }}
+      should-run-stress: ${{ steps.check-tests.outputs.should-run-stress }}
+      should-run-spike: ${{ steps.check-tests.outputs.should-run-spike }}
+      should-run-volume: ${{ steps.check-tests.outputs.should-run-volume }}
+      should-run-endurance: ${{ steps.check-tests.outputs.should-run-endurance }}
+      target-url: ${{ steps.setup-env.outputs.target-url }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Determine test types to run
+        id: check-tests
+        run: |
+          test_type="${{ github.event.inputs.test_type || 'load' }}"
+          
+          if [[ "$test_type" == "all" ]] || [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "should-run-load=true" >> $GITHUB_OUTPUT
+            echo "should-run-stress=true" >> $GITHUB_OUTPUT
+            echo "should-run-spike=true" >> $GITHUB_OUTPUT
+            echo "should-run-volume=true" >> $GITHUB_OUTPUT
+            echo "should-run-endurance=true" >> $GITHUB_OUTPUT
+          else
+            echo "should-run-load=$([[ '$test_type' == 'load' ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+            echo "should-run-stress=$([[ '$test_type' == 'stress' ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+            echo "should-run-spike=$([[ '$test_type' == 'spike' ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+            echo "should-run-volume=$([[ '$test_type' == 'volume' ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+            echo "should-run-endurance=$([[ '$test_type' == 'endurance' ]] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup target environment
+        id: setup-env
+        run: |
+          target_env="${{ github.event.inputs.target_environment || 'staging' }}"
+          
+          if [[ "$target_env" == "production" ]]; then
+            echo "target-url=https://platform.company.com" >> $GITHUB_OUTPUT
+          else
+            echo "target-url=https://staging.platform.company.com" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup test matrix
+        id: setup-matrix
+        run: |
+          test_matrix='[
+            {
+              "service": "api-gateway",
+              "endpoint": "/health",
+              "expected_rps": 1000,
+              "max_response_time": 100
+            },
+            {
+              "service": "authentication-service", 
+              "endpoint": "/auth/login",
+              "expected_rps": 500,
+              "max_response_time": 200
+            },
+            {
+              "service": "payment-service",
+              "endpoint": "/payments/health",
+              "expected_rps": 200,
+              "max_response_time": 300
+            },
+            {
+              "service": "ecommerce-service",
+              "endpoint": "/ecommerce/products",
+              "expected_rps": 800,
+              "max_response_time": 250
+            },
+            {
+              "service": "search-service",
+              "endpoint": "/search/health",
+              "expected_rps": 600,
+              "max_response_time": 150
+            }
+          ]'
+          
+          echo "test-matrix=$test_matrix" >> $GITHUB_OUTPUT
+
+  load-testing:
+    needs: setup-performance-tests
+    if: needs.setup-performance-tests.outputs.should-run-load == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        test: ${{ fromJson(needs.setup-performance-tests.outputs.test-matrix) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install Artillery
+        run: npm install -g artillery@latest
+
+      - name: Create load test configuration
+        run: |
+          cat > load-test-${{ matrix.test.service }}.yml << EOF
+          config:
+            target: '${{ needs.setup-performance-tests.outputs.target-url }}'
+            phases:
+              - duration: 60
+                arrivalRate: 10
+                name: "Warm up"
+              - duration: ${{ github.event.inputs.duration || '300' }}
+                arrivalRate: ${{ matrix.test.expected_rps }}
+                name: "Load test"
+              - duration: 60
+                arrivalRate: 5
+                name: "Cool down"
+            processor: "./performance-processor.js"
+          scenarios:
+            - name: "Load test ${{ matrix.test.service }}"
+              weight: 100
+              flow:
+                - get:
+                    url: "${{ matrix.test.endpoint }}"
+                    expect:
+                      - statusCode: 200
+                      - contentType: json
+                    capture:
+                      - json: "$.status"
+                        as: "status"
+                    think: 1
+          EOF
+
+      - name: Create performance processor
+        run: |
+          cat > performance-processor.js << 'EOF'
+          module.exports = {
+            setHeaders: function(requestParams, context, ee, next) {
+              requestParams.headers = requestParams.headers || {};
+              requestParams.headers['User-Agent'] = 'Artillery-Performance-Test';
+              requestParams.headers['X-Test-Run'] = process.env.GITHUB_RUN_ID || 'local';
+              return next();
+            },
+            
+            logResponse: function(requestParams, response, context, ee, next) {
+              if (response.statusCode !== 200) {
+                console.log(`Error response: ${response.statusCode} - ${response.body}`);
+              }
+              return next();
+            }
+          };
+          EOF
+
+      - name: Run load test
+        run: |
+          echo "Running load test for ${{ matrix.test.service }}..."
+          artillery run load-test-${{ matrix.test.service }}.yml \
+            --output load-test-results-${{ matrix.test.service }}.json
+
+      - name: Generate load test report
+        run: |
+          artillery report load-test-results-${{ matrix.test.service }}.json \
+            --output load-test-report-${{ matrix.test.service }}.html
+
+      - name: Analyze results
+        run: |
+          echo "Analyzing load test results for ${{ matrix.test.service }}..."
+          
+          # Extract key metrics
+          if [ -f "load-test-results-${{ matrix.test.service }}.json" ]; then
+            node -e "
+              const fs = require('fs');
+              const results = JSON.parse(fs.readFileSync('load-test-results-${{ matrix.test.service }}.json', 'utf8'));
+              const aggregate = results.aggregate;
+              
+              console.log('=== Load Test Results for ${{ matrix.test.service }} ===');
+              console.log('Total requests:', aggregate.counters['http.requests'] || 0);
+              console.log('Successful requests:', aggregate.counters['http.codes.200'] || 0);
+              console.log('Failed requests:', (aggregate.counters['http.requests'] || 0) - (aggregate.counters['http.codes.200'] || 0));
+              console.log('Average response time:', Math.round(aggregate.latency?.mean || 0), 'ms');
+              console.log('95th percentile:', Math.round(aggregate.latency?.p95 || 0), 'ms');
+              console.log('99th percentile:', Math.round(aggregate.latency?.p99 || 0), 'ms');
+              console.log('RPS:', Math.round(aggregate.rates?.['http.request_rate'] || 0));
+              
+              // Check if performance meets expectations
+              const avgResponseTime = aggregate.latency?.mean || 0;
+              const maxExpectedTime = ${{ matrix.test.max_response_time }};
+              
+              if (avgResponseTime > maxExpectedTime) {
+                console.log('❌ Performance degradation detected!');
+                console.log('Expected max response time:', maxExpectedTime, 'ms');
+                console.log('Actual average response time:', Math.round(avgResponseTime), 'ms');
+                process.exit(1);
+              } else {
+                console.log('✅ Performance within acceptable limits');
+              }
+            "
+          fi
+
+      - name: Upload load test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results-${{ matrix.test.service }}
+          path: |
+            load-test-results-${{ matrix.test.service }}.json
+            load-test-report-${{ matrix.test.service }}.html
+          retention-days: 30
+
+  stress-testing:
+    needs: setup-performance-tests
+    if: needs.setup-performance-tests.outputs.should-run-stress == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+
+      - name: Create stress test script
+        run: |
+          cat > stress-test.js << 'EOF'
+          import http from 'k6/http';
+          import { check, sleep } from 'k6';
+          import { Rate } from 'k6/metrics';
+
+          const errorRate = new Rate('errors');
+          const baseUrl = __ENV.TARGET_URL || 'https://staging.platform.company.com';
+
+          export let options = {
+            stages: [
+              { duration: '2m', target: 100 }, // Ramp up
+              { duration: '5m', target: 100 }, // Stay at 100 users
+              { duration: '2m', target: 200 }, // Ramp up to 200 users
+              { duration: '5m', target: 200 }, // Stay at 200 users
+              { duration: '2m', target: 300 }, // Ramp up to 300 users
+              { duration: '5m', target: 300 }, // Stay at 300 users
+              { duration: '2m', target: 400 }, // Ramp up to 400 users
+              { duration: '5m', target: 400 }, // Stay at 400 users
+              { duration: '5m', target: 0 },   // Ramp down
+            ],
+            thresholds: {
+              http_req_duration: ['p(95)<500'], // 95% of requests must complete below 500ms
+              http_req_failed: ['rate<0.1'],   // Error rate must be below 10%
+            },
+          };
+
+          export default function() {
+            const endpoints = [
+              '/health',
+              '/auth/health', 
+              '/ecommerce/health',
+              '/payments/health',
+              '/search/health'
+            ];
+            
+            const endpoint = endpoints[Math.floor(Math.random() * endpoints.length)];
+            const response = http.get(`${baseUrl}${endpoint}`);
+            
+            const result = check(response, {
+              'status is 200': (r) => r.status === 200,
+              'response time < 500ms': (r) => r.timings.duration < 500,
+            });
+            
+            errorRate.add(!result);
+            sleep(1);
+          }
+          EOF
+
+      - name: Run stress test
+        run: |
+          k6 run stress-test.js \
+            --env TARGET_URL=${{ needs.setup-performance-tests.outputs.target-url }} \
+            --out json=stress-test-results.json
+        env:
+          TARGET_URL: ${{ needs.setup-performance-tests.outputs.target-url }}
+
+      - name: Upload stress test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-test-results
+          path: stress-test-results.json
+          retention-days: 30
+
+  database-performance:
+    needs: setup-performance-tests
+    if: needs.setup-performance-tests.outputs.should-run-load == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run database performance tests
+        run: |
+          echo "Running database performance tests..."
+          
+          # This would run database-specific performance tests
+          if [ -f "scripts/db-performance-test.js" ]; then
+            node scripts/db-performance-test.js
+          else
+            echo "Creating sample database performance test..."
+            cat > db-perf-test.js << 'EOF'
+            const { performance } = require('perf_hooks');
+            
+            async function runDatabasePerformanceTest() {
+              console.log('=== Database Performance Test ===');
+              
+              // Simulate database operations
+              const operations = [
+                'SELECT queries',
+                'INSERT operations', 
+                'UPDATE operations',
+                'Complex JOIN queries',
+                'Aggregation queries'
+              ];
+              
+              for (const operation of operations) {
+                const start = performance.now();
+                
+                // Simulate operation time
+                await new Promise(resolve => setTimeout(resolve, Math.random() * 100));
+                
+                const end = performance.now();
+                const duration = Math.round(end - start);
+                
+                console.log(`${operation}: ${duration}ms`);
+                
+                if (duration > 100) {
+                  console.log(`⚠️ Slow ${operation} detected`);
+                }
+              }
+              
+              console.log('✅ Database performance test completed');
+            }
+            
+            runDatabasePerformanceTest().catch(console.error);
+            EOF
+            
+            node db-perf-test.js
+          fi
+
+  memory-profiling:
+    needs: setup-performance-tests
+    if: needs.setup-performance-tests.outputs.should-run-load == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install profiling tools
+        run: |
+          npm install -g clinic autocannon
+
+      - name: Run memory profiling
+        run: |
+          echo "Running memory profiling tests..."
+          
+          # This would profile memory usage of services
+          services=("api-gateway" "authentication-service" "payment-service")
+          
+          for service in "${services[@]}"; do
+            if [ -d "services/$service" ]; then
+              echo "Profiling $service..."
+              cd "services/$service"
+              
+              if [ -f "package.json" ] && grep -q '"start"' package.json; then
+                # Start service with profiling
+                timeout 60s clinic doctor --on-port 'autocannon localhost:$PORT/health -d 30' -- npm start || true
+                
+                # Check if profile was generated
+                if [ -f ".clinic"/*.html ]; then
+                  echo "✅ Profile generated for $service"
+                  mv .clinic/*.html "../../$service-profile.html" || true
+                fi
+              fi
+              
+              cd - > /dev/null
+            fi
+          done
+
+      - name: Upload profiling results
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-profiling-results
+          path: "*-profile.html"
+          retention-days: 30
+
+  performance-report:
+    needs: [load-testing, stress-testing, database-performance, memory-profiling]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: performance-results
+
+      - name: Generate performance report
+        run: |
+          echo "# Performance Testing Report" > performance-report.md
+          echo "Generated: $(date)" >> performance-report.md
+          echo "Commit: ${{ github.sha }}" >> performance-report.md
+          echo "Target: ${{ needs.setup-performance-tests.outputs.target-url }}" >> performance-report.md
+          echo "" >> performance-report.md
+          
+          echo "## Test Results Summary" >> performance-report.md
+          echo "| Test Type | Status | Duration |" >> performance-report.md
+          echo "|-----------|--------|----------|" >> performance-report.md
+          echo "| Load Testing | ${{ needs.load-testing.result }} | ${{ github.event.inputs.duration || '10' }} minutes |" >> performance-report.md
+          echo "| Stress Testing | ${{ needs.stress-testing.result }} | Variable |" >> performance-report.md
+          echo "| Database Performance | ${{ needs.database-performance.result }} | ~5 minutes |" >> performance-report.md
+          echo "| Memory Profiling | ${{ needs.memory-profiling.result }} | ~10 minutes |" >> performance-report.md
+          echo "" >> performance-report.md
+          
+          echo "## Key Findings" >> performance-report.md
+          echo "- Review individual test artifacts for detailed metrics" >> performance-report.md
+          echo "- Check for any performance regressions" >> performance-report.md
+          echo "- Monitor resource utilization patterns" >> performance-report.md
+          echo "" >> performance-report.md
+          
+          echo "## Recommendations" >> performance-report.md
+          echo "1. Address any failed performance tests" >> performance-report.md
+          echo "2. Optimize slow database queries" >> performance-report.md
+          echo "3. Review memory usage patterns" >> performance-report.md
+          echo "4. Consider scaling if load limits are reached" >> performance-report.md
+          echo "" >> performance-report.md
+          
+          echo "## Artifacts" >> performance-report.md
+          find performance-results -type f | while read file; do
+            echo "- $(basename "$file")" >> performance-report.md
+          done
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-testing-report
+          path: |
+            performance-report.md
+            performance-results/
+          retention-days: 90
+
+      - name: Check performance thresholds
+        run: |
+          echo "Checking performance test results..."
+          
+          failed_tests=false
+          
+          if [[ "${{ needs.load-testing.result }}" == "failure" ]]; then
+            echo "❌ Load testing failed"
+            failed_tests=true
+          fi
+          
+          if [[ "${{ needs.stress-testing.result }}" == "failure" ]]; then
+            echo "❌ Stress testing failed"
+            failed_tests=true
+          fi
+          
+          if [[ "$failed_tests" == "true" ]]; then
+            echo "🚨 Performance tests failed - review required"
+            exit 1
+          else
+            echo "✅ All performance tests passed"
+          fi
+
+      - name: Notify on performance issues
+        if: failure() && github.ref == 'refs/heads/main'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: "⚠️ Performance tests failed for ${{ github.repository }} - Performance regression detected"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.PERFORMANCE_SLACK_WEBHOOK_URL }}

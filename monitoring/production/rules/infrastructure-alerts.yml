@@ -1,0 +1,158 @@
+groups:
+  - name: infrastructure.rules
+    rules:
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/high-cpu"
+
+      # Critical CPU Usage
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Critical CPU usage detected on {{ $labels.instance }}"
+          description: "CPU usage is above 95% for more than 2 minutes on {{ $labels.instance }}"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/critical-cpu"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High memory usage detected on {{ $labels.instance }}"
+          description: "Memory usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/high-memory"
+
+      # Critical Memory Usage
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Critical memory usage detected on {{ $labels.instance }}"
+          description: "Memory usage is above 95% for more than 2 minutes on {{ $labels.instance }}"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/critical-memory"
+
+      # High Disk Usage
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High disk usage detected on {{ $labels.instance }}"
+          description: "Disk usage is above 80% for more than 5 minutes on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/high-disk"
+
+      # Critical Disk Usage
+      - alert: CriticalDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Critical disk usage detected on {{ $labels.instance }}"
+          description: "Disk usage is above 95% for more than 2 minutes on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/critical-disk"
+
+      # High Network Traffic
+      - alert: HighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total[5m]) + rate(node_network_transmit_bytes_total[5m]) > 100000000
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High network traffic detected on {{ $labels.instance }}"
+          description: "Network traffic is above 100MB/s for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/high-network"
+
+      # Node Down
+      - alert: NodeDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "Node {{ $labels.instance }} is down"
+          description: "Node {{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/node-down"
+
+      # High Load Average
+      - alert: HighLoadAverage
+        expr: node_load15 / count by(instance) (node_cpu_seconds_total{mode="idle"}) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "High load average on {{ $labels.instance }}"
+          description: "Load average is above 2x CPU cores for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://runbooks.yourplatform.com/infrastructure/high-load"
+
+      # Database Connection Pool Exhaustion
+      - alert: DatabaseConnectionPoolExhaustion
+        expr: pg_stat_database_numbackends / pg_settings_max_connections * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          category: database
+        annotations:
+          summary: "Database connection pool usage is high"
+          description: "Database connection pool usage is above 80% for more than 2 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/database/connection-pool"
+
+      # Redis Memory Usage
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: cache
+        annotations:
+          summary: "Redis memory usage is high"
+          description: "Redis memory usage is above 80% for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/cache/redis-memory"
+
+      # RabbitMQ Queue Length
+      - alert: RabbitMQHighQueueLength
+        expr: rabbitmq_queue_messages > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: messaging
+        annotations:
+          summary: "RabbitMQ queue {{ $labels.queue }} has high message count"
+          description: "Queue {{ $labels.queue }} has more than 1000 messages for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/messaging/high-queue-length"
+
+      # Elasticsearch Cluster Health
+      - alert: ElasticsearchClusterNotHealthy
+        expr: elasticsearch_cluster_health_status{color="red"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          category: search
+        annotations:
+          summary: "Elasticsearch cluster health is red"
+          description: "Elasticsearch cluster health has been red for more than 1 minute"
+          runbook_url: "https://runbooks.yourplatform.com/search/cluster-health"

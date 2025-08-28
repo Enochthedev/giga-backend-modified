@@ -1,0 +1,173 @@
+groups:
+  - name: business.rules
+    rules:
+      # Revenue Drop
+      - alert: SignificantRevenueDrop
+        expr: (sum(rate(payment_successful_amount_total[1h])) - sum(rate(payment_successful_amount_total[1h] offset 24h))) / sum(rate(payment_successful_amount_total[1h] offset 24h)) * 100 < -20
+        for: 15m
+        labels:
+          severity: critical
+          category: business
+        annotations:
+          summary: "Significant revenue drop detected"
+          description: "Revenue has dropped by more than 20% compared to the same time yesterday"
+          runbook_url: "https://runbooks.yourplatform.com/business/revenue-drop"
+
+      # Low Conversion Rate
+      - alert: LowConversionRate
+        expr: rate(orders_completed_total[1h]) / rate(sessions_started_total[1h]) * 100 < 2
+        for: 30m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Low conversion rate detected"
+          description: "Conversion rate has been below 2% for more than 30 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/business/low-conversion"
+
+      # High Refund Rate
+      - alert: HighRefundRate
+        expr: rate(refunds_processed_total[24h]) / rate(payments_successful_total[24h]) * 100 > 10
+        for: 1h
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "High refund rate detected"
+          description: "Refund rate has been above 10% for more than 1 hour"
+          runbook_url: "https://runbooks.yourplatform.com/business/high-refunds"
+
+      # Fraud Detection
+      - alert: HighFraudDetectionRate
+        expr: rate(fraud_detected_total[1h]) / rate(transactions_total[1h]) * 100 > 5
+        for: 15m
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "High fraud detection rate"
+          description: "Fraud detection rate has been above 5% for more than 15 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/security/fraud-detection"
+
+      # User Registration Drop
+      - alert: UserRegistrationDrop
+        expr: (sum(rate(user_registrations_total[1h])) - sum(rate(user_registrations_total[1h] offset 24h))) / sum(rate(user_registrations_total[1h] offset 24h)) * 100 < -30
+        for: 30m
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Significant drop in user registrations"
+          description: "User registrations have dropped by more than 30% compared to yesterday"
+          runbook_url: "https://runbooks.yourplatform.com/business/registration-drop"
+
+      # Active Users Drop
+      - alert: ActiveUsersDrop
+        expr: (sum(active_users_current) - sum(active_users_current offset 24h)) / sum(active_users_current offset 24h) * 100 < -25
+        for: 1h
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "Significant drop in active users"
+          description: "Active users have dropped by more than 25% compared to yesterday"
+          runbook_url: "https://runbooks.yourplatform.com/business/active-users-drop"
+
+      # Taxi Service Business Metrics
+      - alert: TaxiLowDriverAvailability
+        expr: taxi_available_drivers / taxi_total_drivers * 100 < 20
+        for: 15m
+        labels:
+          severity: warning
+          category: business
+          service: taxi
+        annotations:
+          summary: "Low taxi driver availability"
+          description: "Available drivers are below 20% of total drivers for more than 15 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/business/taxi-driver-availability"
+
+      - alert: TaxiHighWaitTime
+        expr: histogram_quantile(0.95, rate(taxi_wait_time_seconds_bucket[15m])) > 600
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+          service: taxi
+        annotations:
+          summary: "High taxi wait times"
+          description: "95th percentile taxi wait time is above 10 minutes for more than 10 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/business/taxi-wait-time"
+
+      # Hotel Service Business Metrics
+      - alert: HotelLowOccupancyRate
+        expr: hotel_occupied_rooms / hotel_total_rooms * 100 < 30
+        for: 2h
+        labels:
+          severity: warning
+          category: business
+          service: hotel
+        annotations:
+          summary: "Low hotel occupancy rate"
+          description: "Hotel occupancy rate has been below 30% for more than 2 hours"
+          runbook_url: "https://runbooks.yourplatform.com/business/hotel-occupancy"
+
+      # Ecommerce Business Metrics
+      - alert: EcommerceHighInventoryAlerts
+        expr: sum(inventory_low_stock_alerts) > 100
+        for: 30m
+        labels:
+          severity: warning
+          category: business
+          service: ecommerce
+        annotations:
+          summary: "High number of low stock alerts"
+          description: "More than 100 products are showing low stock alerts for more than 30 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/business/inventory-alerts"
+
+      - alert: EcommerceAverageOrderValueDrop
+        expr: (avg(order_value_total) - avg(order_value_total offset 24h)) / avg(order_value_total offset 24h) * 100 < -15
+        for: 1h
+        labels:
+          severity: warning
+          category: business
+          service: ecommerce
+        annotations:
+          summary: "Average order value has dropped significantly"
+          description: "Average order value has dropped by more than 15% compared to yesterday"
+          runbook_url: "https://runbooks.yourplatform.com/business/order-value-drop"
+
+      # Advertisement Service Business Metrics
+      - alert: AdLowClickThroughRate
+        expr: rate(ad_clicks_total[1h]) / rate(ad_impressions_total[1h]) * 100 < 1
+        for: 2h
+        labels:
+          severity: warning
+          category: business
+          service: advertisement
+        annotations:
+          summary: "Low advertisement click-through rate"
+          description: "Ad click-through rate has been below 1% for more than 2 hours"
+          runbook_url: "https://runbooks.yourplatform.com/business/ad-ctr"
+
+      # Customer Support Metrics
+      - alert: HighSupportTicketVolume
+        expr: rate(support_tickets_created_total[1h]) > 50
+        for: 30m
+        labels:
+          severity: warning
+          category: support
+        annotations:
+          summary: "High support ticket volume"
+          description: "Support ticket creation rate is above 50 per hour for more than 30 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/support/high-ticket-volume"
+
+      - alert: LowCustomerSatisfactionScore
+        expr: avg(customer_satisfaction_score) < 3.5
+        for: 1h
+        labels:
+          severity: warning
+          category: support
+        annotations:
+          summary: "Low customer satisfaction score"
+          description: "Average customer satisfaction score has been below 3.5 for more than 1 hour"
+          runbook_url: "https://runbooks.yourplatform.com/support/low-satisfaction"

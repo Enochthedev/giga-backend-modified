@@ -1,0 +1,81 @@
+openapi: 3.0.3
+info:
+  title: File Service API
+  description: File upload, storage, and media processing service
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3006
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+
+  /upload:
+    post:
+      summary: Upload file
+      tags: [Files]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                category:
+                  type: string
+                  enum: [profile, product, document]
+      responses:
+        '201':
+          description: File uploaded successfully
+
+  /files/{fileId}:
+    get:
+      summary: Get file details
+      tags: [Files]
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File details retrieved
+
+    delete:
+      summary: Delete file
+      tags: [Files]
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File deleted successfully
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+tags:
+  - name: Health
+  - name: Files

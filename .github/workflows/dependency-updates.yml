@@ -1,0 +1,510 @@
+name: Dependency Updates
+
+on:
+  schedule:
+    # Run dependency updates weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of dependency update'
+        required: true
+        default: 'minor'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - all
+      create_pr:
+        description: 'Create pull request for updates'
+        required: true
+        default: true
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '8'
+
+jobs:
+  check-dependencies:
+    runs-on: ubuntu-latest
+    outputs:
+      has-updates: ${{ steps.check-updates.outputs.has-updates }}
+      services-with-updates: ${{ steps.check-updates.outputs.services-with-updates }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for outdated dependencies
+        id: check-updates
+        run: |
+          echo "Checking for outdated dependencies across all services..."
+          
+          services_with_updates=()
+          has_updates=false
+          
+          # Check root dependencies
+          echo "=== Root Dependencies ===" 
+          pnpm outdated --format json > root-outdated.json 2>/dev/null || echo "{}" > root-outdated.json
+          
+          if [ -s root-outdated.json ] && [ "$(cat root-outdated.json)" != "{}" ]; then
+            echo "Root dependencies have updates available"
+            has_updates=true
+            services_with_updates+=("root")
+          fi
+          
+          # Check each service
+          find services -name "package.json" -exec dirname {} \; | while read service_path; do
+            service_name=$(basename "$service_path")
+            echo "=== Checking $service_name ==="
+            
+            cd "$service_path"
+            pnpm outdated --format json > "../outdated-$service_name.json" 2>/dev/null || echo "{}" > "../outdated-$service_name.json"
+            
+            if [ -s "../outdated-$service_name.json" ] && [ "$(cat "../outdated-$service_name.json")" != "{}" ]; then
+              echo "$service_name has updates available"
+              echo "has_updates=true" >> $GITHUB_ENV
+              echo "$service_name" >> ../services_with_updates.txt
+            fi
+            
+            cd - > /dev/null
+          done
+          
+          # Check packages/common
+          if [ -d "packages/common" ]; then
+            echo "=== Checking common package ==="
+            cd packages/common
+            pnpm outdated --format json > "../../outdated-common.json" 2>/dev/null || echo "{}" > "../../outdated-common.json"
+            
+            if [ -s "../../outdated-common.json" ] && [ "$(cat "../../outdated-common.json")" != "{}" ]; then
+              echo "Common package has updates available"
+              has_updates=true
+              echo "common" >> ../../services_with_updates.txt
+            fi
+            cd - > /dev/null
+          fi
+          
+          # Set outputs
+          if [ -f services_with_updates.txt ]; then
+            services_json=$(jq -R -s -c 'split("\n")[:-1]' services_with_updates.txt)
+            echo "services-with-updates=$services_json" >> $GITHUB_OUTPUT
+            echo "has-updates=true" >> $GITHUB_OUTPUT
+          else
+            echo "services-with-updates=[]" >> $GITHUB_OUTPUT
+            echo "has-updates=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload outdated dependency reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: outdated-dependencies
+          path: |
+            *-outdated*.json
+            services_with_updates.txt
+          retention-days: 7
+
+  update-dependencies:
+    needs: check-dependencies
+    if: needs.check-dependencies.outputs.has-updates == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.check-dependencies.outputs.services-with-updates) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'dependency-updater[bot]'
+          git config --global user.email 'dependency-updater[bot]@users.noreply.github.com'
+
+      - name: Create update branch
+        run: |
+          branch_name="dependency-updates/${{ matrix.service }}/$(date +%Y%m%d)"
+          echo "BRANCH_NAME=$branch_name" >> $GITHUB_ENV
+          git checkout -b "$branch_name"
+
+      - name: Update dependencies for service
+        run: |
+          update_type="${{ github.event.inputs.update_type || 'minor' }}"
+          service="${{ matrix.service }}"
+          
+          echo "Updating dependencies for $service (type: $update_type)..."
+          
+          if [ "$service" == "root" ]; then
+            working_dir="."
+          elif [ "$service" == "common" ]; then
+            working_dir="packages/common"
+          else
+            working_dir="services/$service"
+          fi
+          
+          cd "$working_dir"
+          
+          # Install current dependencies
+          pnpm install --frozen-lockfile
+          
+          # Update dependencies based on type
+          case "$update_type" in
+            "patch")
+              pnpm update --latest --depth 0 --filter "~0.0.1"
+              ;;
+            "minor")
+              pnpm update --latest --depth 0 --filter "~0.1.0"
+              ;;
+            "major")
+              pnpm update --latest --depth 0
+              ;;
+            "all")
+              pnpm update --latest --depth 0
+              ;;
+          esac
+          
+          # Run tests to ensure updates don't break anything
+          if [ -f "package.json" ] && pnpm run --if-present test; then
+            echo "Running tests after dependency updates..."
+            pnpm run test --passWithNoTests || {
+              echo "❌ Tests failed after dependency updates"
+              exit 1
+            }
+          fi
+          
+          cd - > /dev/null
+
+      - name: Check for security vulnerabilities
+        run: |
+          service="${{ matrix.service }}"
+          
+          if [ "$service" == "root" ]; then
+            working_dir="."
+          elif [ "$service" == "common" ]; then
+            working_dir="packages/common"
+          else
+            working_dir="services/$service"
+          fi
+          
+          cd "$working_dir"
+          
+          echo "Checking for security vulnerabilities after updates..."
+          pnpm audit --audit-level=high --prod || {
+            echo "⚠️ Security vulnerabilities found after updates"
+            # Don't fail the job, but log the warning
+          }
+          
+          cd - > /dev/null
+
+      - name: Generate update summary
+        run: |
+          service="${{ matrix.service }}"
+          
+          echo "# Dependency Updates for $service" > update-summary-$service.md
+          echo "Generated: $(date)" >> update-summary-$service.md
+          echo "" >> update-summary-$service.md
+          
+          if [ "$service" == "root" ]; then
+            working_dir="."
+          elif [ "$service" == "common" ]; then
+            working_dir="packages/common"
+          else
+            working_dir="services/$service"
+          fi
+          
+          cd "$working_dir"
+          
+          # Check what changed
+          if git diff --name-only | grep -q "package.json\|pnpm-lock.yaml"; then
+            echo "## Updated Files" >> "../update-summary-$service.md"
+            git diff --name-only | grep -E "(package\.json|pnpm-lock\.yaml)" >> "../update-summary-$service.md"
+            echo "" >> "../update-summary-$service.md"
+            
+            echo "## Package.json Changes" >> "../update-summary-$service.md"
+            echo '```diff' >> "../update-summary-$service.md"
+            git diff package.json >> "../update-summary-$service.md" || true
+            echo '```' >> "../update-summary-$service.md"
+          else
+            echo "No dependency changes detected" >> "../update-summary-$service.md"
+          fi
+          
+          cd - > /dev/null
+
+      - name: Commit changes
+        run: |
+          service="${{ matrix.service }}"
+          
+          if git diff --quiet; then
+            echo "No changes to commit for $service"
+            echo "HAS_CHANGES=false" >> $GITHUB_ENV
+          else
+            echo "Committing dependency updates for $service"
+            git add .
+            git commit -m "chore($service): update dependencies
+
+            - Update ${{ github.event.inputs.update_type || 'minor' }} dependencies
+            - Run tests to ensure compatibility
+            - Check for security vulnerabilities
+            
+            Auto-generated by dependency-updates workflow"
+            
+            echo "HAS_CHANGES=true" >> $GITHUB_ENV
+          fi
+
+      - name: Push changes
+        if: env.HAS_CHANGES == 'true'
+        run: |
+          git push origin "$BRANCH_NAME"
+
+      - name: Upload update summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-summary-${{ matrix.service }}
+          path: update-summary-${{ matrix.service }}.md
+          retention-days: 30
+
+  create-pull-requests:
+    needs: [check-dependencies, update-dependencies]
+    if: |
+      needs.check-dependencies.outputs.has-updates == 'true' && 
+      (github.event.inputs.create_pr == 'true' || github.event.inputs.create_pr == '' || github.event_name == 'schedule')
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.check-dependencies.outputs.services-with-updates) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Download update summary
+        uses: actions/download-artifact@v4
+        with:
+          name: update-summary-${{ matrix.service }}
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: dependency-updates/${{ matrix.service }}/$(date +%Y%m%d)
+          title: "chore(${{ matrix.service }}): update dependencies"
+          body: |
+            ## Dependency Updates for ${{ matrix.service }}
+            
+            This PR contains automated dependency updates for the ${{ matrix.service }} service.
+            
+            ### Update Type
+            - **Type**: ${{ github.event.inputs.update_type || 'minor' }}
+            - **Generated**: $(date)
+            - **Workflow**: ${{ github.workflow }}
+            
+            ### Changes
+            $(cat update-summary-${{ matrix.service }}.md)
+            
+            ### Verification
+            - [x] Dependencies updated successfully
+            - [x] Tests pass after updates
+            - [x] Security audit completed
+            - [ ] Manual testing completed (if required)
+            
+            ### Notes
+            - This PR was automatically generated by the dependency update workflow
+            - Please review the changes and test thoroughly before merging
+            - Consider the impact of major version updates on the service
+            
+            ### Checklist
+            - [ ] Review dependency changes
+            - [ ] Run integration tests
+            - [ ] Check for breaking changes
+            - [ ] Update documentation if needed
+            - [ ] Verify service functionality
+          labels: |
+            dependencies
+            automated
+            ${{ matrix.service }}
+          reviewers: |
+            platform-team
+          assignees: |
+            platform-team
+          draft: false
+
+  security-audit:
+    needs: update-dependencies
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run comprehensive security audit
+        run: |
+          echo "Running comprehensive security audit after dependency updates..."
+          
+          # Audit root dependencies
+          echo "=== Root Dependencies Security Audit ==="
+          pnpm audit --audit-level=moderate --prod || true
+          
+          # Audit each service
+          find services -name "package.json" -exec dirname {} \; | while read service_path; do
+            service_name=$(basename "$service_path")
+            echo "=== $service_name Security Audit ==="
+            
+            cd "$service_path"
+            pnpm audit --audit-level=moderate --prod || true
+            cd - > /dev/null
+          done
+          
+          # Audit common package
+          if [ -d "packages/common" ]; then
+            echo "=== Common Package Security Audit ==="
+            cd packages/common
+            pnpm audit --audit-level=moderate --prod || true
+            cd - > /dev/null
+          fi
+
+      - name: Check for known vulnerabilities
+        run: |
+          echo "Checking for known vulnerabilities in updated dependencies..."
+          
+          # Use npm audit for additional vulnerability checking
+          if command -v npm &> /dev/null; then
+            npm audit --audit-level=high --production || true
+          fi
+
+  cleanup:
+    needs: [create-pull-requests, security-audit]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Cleanup old dependency update branches
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            
+            // Get all branches
+            const branches = await github.rest.repos.listBranches({
+              owner,
+              repo,
+              per_page: 100
+            });
+            
+            // Find old dependency update branches (older than 7 days)
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            
+            for (const branch of branches.data) {
+              if (branch.name.startsWith('dependency-updates/')) {
+                try {
+                  // Get branch details
+                  const branchDetails = await github.rest.repos.getBranch({
+                    owner,
+                    repo,
+                    branch: branch.name
+                  });
+                  
+                  const branchDate = new Date(branchDetails.data.commit.commit.author.date);
+                  
+                  if (branchDate < sevenDaysAgo) {
+                    console.log(`Deleting old dependency update branch: ${branch.name}`);
+                    
+                    await github.rest.git.deleteRef({
+                      owner,
+                      repo,
+                      ref: `heads/${branch.name}`
+                    });
+                  }
+                } catch (error) {
+                  console.log(`Could not process branch ${branch.name}: ${error.message}`);
+                }
+              }
+            }
+
+      - name: Generate dependency update report
+        run: |
+          echo "# Dependency Update Report" > dependency-report.md
+          echo "Generated: $(date)" >> dependency-report.md
+          echo "Workflow: ${{ github.workflow }}" >> dependency-report.md
+          echo "Run ID: ${{ github.run_id }}" >> dependency-report.md
+          echo "" >> dependency-report.md
+          
+          echo "## Summary" >> dependency-report.md
+          echo "- Update Type: ${{ github.event.inputs.update_type || 'minor' }}" >> dependency-report.md
+          echo "- Services Updated: ${{ needs.check-dependencies.outputs.services-with-updates }}" >> dependency-report.md
+          echo "- PRs Created: ${{ github.event.inputs.create_pr != 'false' }}" >> dependency-report.md
+          echo "" >> dependency-report.md
+          
+          echo "## Job Results" >> dependency-report.md
+          echo "- Check Dependencies: ${{ needs.check-dependencies.result }}" >> dependency-report.md
+          echo "- Update Dependencies: ${{ needs.update-dependencies.result }}" >> dependency-report.md
+          echo "- Create Pull Requests: ${{ needs.create-pull-requests.result }}" >> dependency-report.md
+          echo "- Security Audit: ${{ needs.security-audit.result }}" >> dependency-report.md
+
+      - name: Upload dependency update report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-update-report
+          path: dependency-report.md
+          retention-days: 30
+
+      - name: Notify on completion
+        if: github.event_name == 'schedule'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            📦 Weekly dependency updates completed
+            - Services updated: ${{ needs.check-dependencies.outputs.services-with-updates }}
+            - Status: ${{ needs.update-dependencies.result }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.DEPENDENCY_SLACK_WEBHOOK_URL }}

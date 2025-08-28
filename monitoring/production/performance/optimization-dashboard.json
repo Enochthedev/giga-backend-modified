@@ -1,0 +1,176 @@
+{
+    "dashboard": {
+        "id": null,
+        "title": "Performance Optimization Dashboard",
+        "tags": [
+            "performance",
+            "optimization",
+            "sli",
+            "slo"
+        ],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "panels": [
+            {
+                "id": 1,
+                "title": "SLI/SLO Overview",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(rate(http_requests_total{status!~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+                        "legendFormat": "Availability %"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+                        "legendFormat": "P95 Latency"
+                    },
+                    {
+                        "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+                        "legendFormat": "Error Rate %"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "red",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 95
+                                },
+                                {
+                                    "color": "green",
+                                    "value": 99
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 8,
+                    "w": 24,
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": 2,
+                "title": "Database Performance Metrics",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(pg_stat_database_tup_returned[5m]) / rate(pg_stat_database_tup_fetched[5m])",
+                        "legendFormat": "Query Efficiency"
+                    },
+                    {
+                        "expr": "pg_stat_database_numbackends",
+                        "legendFormat": "Active Connections"
+                    },
+                    {
+                        "expr": "rate(pg_stat_database_conflicts[5m])",
+                        "legendFormat": "Lock Conflicts/sec"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 8
+                }
+            },
+            {
+                "id": 3,
+                "title": "Cache Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "redis_keyspace_hits / (redis_keyspace_hits + redis_keyspace_misses) * 100",
+                        "legendFormat": "Cache Hit Rate %"
+                    },
+                    {
+                        "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+                        "legendFormat": "Memory Usage %"
+                    },
+                    {
+                        "expr": "rate(redis_commands_processed_total[5m])",
+                        "legendFormat": "Commands/sec"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 8
+                }
+            },
+            {
+                "id": 4,
+                "title": "Resource Utilization Trends",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "100 - (avg by(instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                        "legendFormat": "CPU Usage % - {{instance}}"
+                    },
+                    {
+                        "expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100",
+                        "legendFormat": "Memory Usage % - {{instance}}"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 24,
+                    "x": 0,
+                    "y": 16
+                }
+            },
+            {
+                "id": 5,
+                "title": "Service Response Time Distribution",
+                "type": "heatmap",
+                "targets": [
+                    {
+                        "expr": "sum(rate(http_request_duration_seconds_bucket[5m])) by (le)",
+                        "format": "heatmap",
+                        "legendFormat": "{{le}}"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 24
+                }
+            },
+            {
+                "id": 6,
+                "title": "Throughput vs Latency",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum(rate(http_requests_total[5m]))",
+                        "legendFormat": "Requests/sec"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+                        "legendFormat": "P95 Latency (ms)"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 24
+                }
+            }
+        ]
+    }
+}

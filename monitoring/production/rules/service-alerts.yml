@@ -1,0 +1,215 @@
+groups:
+  - name: service.rules
+    rules:
+      # Service Down
+      - alert: ServiceDown
+        expr: up{job=~".*-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: service
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 1 minute"
+          runbook_url: "https://runbooks.yourplatform.com/services/service-down"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High response time for {{ $labels.job }}"
+          description: "95th percentile response time is above 2 seconds for more than 5 minutes on {{ $labels.job }}"
+          runbook_url: "https://runbooks.yourplatform.com/performance/high-response-time"
+
+      # Critical Response Time
+      - alert: CriticalResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+          category: performance
+        annotations:
+          summary: "Critical response time for {{ $labels.job }}"
+          description: "95th percentile response time is above 5 seconds for more than 2 minutes on {{ $labels.job }}"
+          runbook_url: "https://runbooks.yourplatform.com/performance/critical-response-time"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "High error rate for {{ $labels.job }}"
+          description: "Error rate is above 5% for more than 5 minutes on {{ $labels.job }}"
+          runbook_url: "https://runbooks.yourplatform.com/reliability/high-error-rate"
+
+      # Critical Error Rate
+      - alert: CriticalErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100 > 15
+        for: 2m
+        labels:
+          severity: critical
+          category: reliability
+        annotations:
+          summary: "Critical error rate for {{ $labels.job }}"
+          description: "Error rate is above 15% for more than 2 minutes on {{ $labels.job }}"
+          runbook_url: "https://runbooks.yourplatform.com/reliability/critical-error-rate"
+
+      # High Request Rate
+      - alert: HighRequestRate
+        expr: rate(http_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: traffic
+        annotations:
+          summary: "High request rate for {{ $labels.job }}"
+          description: "Request rate is above 1000 req/s for more than 5 minutes on {{ $labels.job }}"
+          runbook_url: "https://runbooks.yourplatform.com/traffic/high-request-rate"
+
+      # Authentication Service Specific
+      - alert: AuthenticationServiceHighFailureRate
+        expr: rate(auth_login_failures_total[5m]) / rate(auth_login_attempts_total[5m]) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+          service: authentication
+        annotations:
+          summary: "High authentication failure rate"
+          description: "Authentication failure rate is above 10% for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/security/auth-failures"
+
+      # Payment Service Specific
+      - alert: PaymentServiceHighFailureRate
+        expr: rate(payment_failures_total[5m]) / rate(payment_attempts_total[5m]) * 100 > 5
+        for: 3m
+        labels:
+          severity: critical
+          category: business
+          service: payment
+        annotations:
+          summary: "High payment failure rate"
+          description: "Payment failure rate is above 5% for more than 3 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/business/payment-failures"
+
+      # Ecommerce Service Specific
+      - alert: EcommerceHighCartAbandonmentRate
+        expr: rate(cart_abandoned_total[1h]) / rate(cart_created_total[1h]) * 100 > 70
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+          service: ecommerce
+        annotations:
+          summary: "High cart abandonment rate"
+          description: "Cart abandonment rate is above 70% for more than 10 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/business/cart-abandonment"
+
+      # Hotel Service Specific
+      - alert: HotelServiceHighBookingFailureRate
+        expr: rate(hotel_booking_failures_total[5m]) / rate(hotel_booking_attempts_total[5m]) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+          service: hotel
+        annotations:
+          summary: "High hotel booking failure rate"
+          description: "Hotel booking failure rate is above 10% for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/business/hotel-booking-failures"
+
+      # Taxi Service Specific
+      - alert: TaxiServiceHighRideRequestFailureRate
+        expr: rate(taxi_ride_request_failures_total[5m]) / rate(taxi_ride_requests_total[5m]) * 100 > 15
+        for: 5m
+        labels:
+          severity: warning
+          category: business
+          service: taxi
+        annotations:
+          summary: "High taxi ride request failure rate"
+          description: "Taxi ride request failure rate is above 15% for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/business/taxi-request-failures"
+
+      # File Service Specific
+      - alert: FileServiceHighUploadFailureRate
+        expr: rate(file_upload_failures_total[5m]) / rate(file_upload_attempts_total[5m]) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: storage
+          service: file
+        annotations:
+          summary: "High file upload failure rate"
+          description: "File upload failure rate is above 10% for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/storage/upload-failures"
+
+      # Search Service Specific
+      - alert: SearchServiceHighQueryLatency
+        expr: histogram_quantile(0.95, rate(search_query_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: search
+        annotations:
+          summary: "High search query latency"
+          description: "95th percentile search query latency is above 1 second for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/performance/search-latency"
+
+      # Notification Service Specific
+      - alert: NotificationServiceHighDeliveryFailureRate
+        expr: rate(notification_delivery_failures_total[5m]) / rate(notification_delivery_attempts_total[5m]) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: communication
+          service: notification
+        annotations:
+          summary: "High notification delivery failure rate"
+          description: "Notification delivery failure rate is above 5% for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/communication/notification-failures"
+
+      # API Gateway Specific
+      - alert: APIGatewayHighLatency
+        expr: histogram_quantile(0.95, rate(gateway_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          category: gateway
+          service: api-gateway
+        annotations:
+          summary: "High API Gateway latency"
+          description: "95th percentile API Gateway latency is above 1 second for more than 5 minutes"
+          runbook_url: "https://runbooks.yourplatform.com/gateway/high-latency"
+
+      # Circuit Breaker Open
+      - alert: CircuitBreakerOpen
+        expr: circuit_breaker_state == 1
+        for: 1m
+        labels:
+          severity: warning
+          category: reliability
+        annotations:
+          summary: "Circuit breaker is open for {{ $labels.service }}"
+          description: "Circuit breaker for {{ $labels.service }} has been open for more than 1 minute"
+          runbook_url: "https://runbooks.yourplatform.com/reliability/circuit-breaker"
+
+      # Memory Leak Detection
+      - alert: PossibleMemoryLeak
+        expr: increase(process_resident_memory_bytes[1h]) > 100000000
+        for: 30m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Possible memory leak in {{ $labels.job }}"
+          description: "Memory usage has increased by more than 100MB in the last hour for {{ $labels.job }}"
+          runbook_url: "https://runbooks.yourplatform.com/performance/memory-leak"

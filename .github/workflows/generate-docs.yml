@@ -1,0 +1,158 @@
+name: Generate Documentation
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'services/**/*.ts'
+      - 'services/**/*.js'
+      - 'packages/**/*.ts'
+      - 'packages/**/*.js'
+      - 'docs/**/*.md'
+      - 'scripts/generate-docs.js'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'services/**/*.ts'
+      - 'services/**/*.js'
+      - 'packages/**/*.ts'
+      - 'packages/**/*.js'
+      - 'docs/**/*.md'
+  workflow_dispatch:
+
+jobs:
+  generate-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+    
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    
+    - name: Install TypeDoc globally
+      run: npm install -g typedoc typedoc-plugin-markdown
+    
+    - name: Install JSDoc globally
+      run: npm install -g jsdoc
+    
+    - name: Generate documentation
+      run: |
+        pnpm run docs:generate
+        pnpm run docs:typedoc
+    
+    - name: Check for documentation changes
+      id: verify-changed-files
+      run: |
+        if [ -n "$(git status --porcelain docs/generated/)" ]; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Commit documentation changes
+      if: steps.verify-changed-files.outputs.changed == 'true' && github.event_name == 'push'
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add docs/generated/
+        git commit -m "docs: auto-generate documentation [skip ci]" || exit 0
+        git push
+    
+    - name: Upload documentation artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: generated-documentation
+        path: docs/generated/
+        retention-days: 30
+    
+    - name: Deploy to GitHub Pages (main branch only)
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/generated
+        destination_dir: docs
+        
+  validate-docs:
+    runs-on: ubuntu-latest
+    needs: generate-docs
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download documentation artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: generated-documentation
+        path: docs/generated/
+    
+    - name: Validate documentation structure
+      run: |
+        # Check if required documentation files exist
+        required_files=(
+          "docs/generated/README.md"
+          "docs/generated/service-overview.md"
+        )
+        
+        for file in "${required_files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ Required documentation file missing: $file"
+            exit 1
+          else
+            echo "✅ Found: $file"
+          fi
+        done
+        
+        # Check if TypeDoc generated documentation
+        if [ -d "docs/generated/typedoc" ]; then
+          echo "✅ TypeDoc documentation generated"
+        else
+          echo "⚠️  TypeDoc documentation not found"
+        fi
+        
+        # Check if service documentation exists
+        services_dir="services"
+        if [ -d "$services_dir" ]; then
+          service_count=$(find "$services_dir" -maxdepth 1 -type d | wc -l)
+          echo "📊 Found $((service_count - 1)) services"
+        fi
+        
+        echo "✅ Documentation validation completed"
+    
+    - name: Check documentation quality
+      run: |
+        # Check for broken internal links (simplified check)
+        echo "🔍 Checking for potential documentation issues..."
+        
+        # Check if service overview has content
+        if [ -f "docs/generated/service-overview.md" ]; then
+          line_count=$(wc -l < "docs/generated/service-overview.md")
+          if [ "$line_count" -lt 10 ]; then
+            echo "⚠️  Service overview seems too short ($line_count lines)"
+          else
+            echo "✅ Service overview has adequate content ($line_count lines)"
+          fi
+        fi
+        
+        # Check for empty generated files
+        find docs/generated -name "*.md" -size 0 | while read empty_file; do
+          echo "⚠️  Empty documentation file: $empty_file"
+        done
+        
+        echo "✅ Documentation quality check completed"

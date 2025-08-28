@@ -1,0 +1,215 @@
+# Synthetic Transaction Monitoring Configuration
+# This file defines synthetic tests for critical user journeys
+
+tests:
+  # Health Check Tests
+  - name: "api_gateway_health"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/health"
+    interval: "30s"
+    timeout: "5s"
+    labels:
+      service: "api-gateway"
+      test_type: "health_check"
+
+  - name: "auth_service_health"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/api/v1/auth/health"
+    interval: "30s"
+    timeout: "5s"
+    labels:
+      service: "authentication"
+      test_type: "health_check"
+
+  - name: "ecommerce_service_health"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/api/v1/ecommerce/health"
+    interval: "30s"
+    timeout: "5s"
+    labels:
+      service: "ecommerce"
+      test_type: "health_check"
+
+  - name: "payment_service_health"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/api/v1/payment/health"
+    interval: "30s"
+    timeout: "5s"
+    labels:
+      service: "payment"
+      test_type: "health_check"
+
+  - name: "hotel_service_health"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/api/v1/hotel/health"
+    interval: "30s"
+    timeout: "5s"
+    labels:
+      service: "hotel"
+      test_type: "health_check"
+
+  - name: "taxi_service_health"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/api/v1/taxi/health"
+    interval: "30s"
+    timeout: "5s"
+    labels:
+      service: "taxi"
+      test_type: "health_check"
+
+  # Critical Business Flow Tests
+  - name: "user_registration_flow"
+    type: "http_post_2xx"
+    target: "https://api.yourplatform.com/api/v1/auth/register"
+    interval: "5m"
+    timeout: "10s"
+    body: |
+      {
+        "email": "synthetic-test-{{timestamp}}@example.com",
+        "password": "TestPassword123!",
+        "firstName": "Test",
+        "lastName": "User"
+      }
+    labels:
+      service: "authentication"
+      test_type: "business_flow"
+      flow: "user_registration"
+
+  - name: "user_login_flow"
+    type: "http_auth_2xx"
+    target: "https://api.yourplatform.com/api/v1/auth/login"
+    interval: "2m"
+    timeout: "10s"
+    labels:
+      service: "authentication"
+      test_type: "business_flow"
+      flow: "user_login"
+
+  - name: "product_search"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/api/v1/ecommerce/products/search?q=test"
+    interval: "2m"
+    timeout: "5s"
+    labels:
+      service: "ecommerce"
+      test_type: "business_flow"
+      flow: "product_search"
+
+  - name: "hotel_search"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/api/v1/hotel/search?location=test&checkin=2024-12-01&checkout=2024-12-02"
+    interval: "2m"
+    timeout: "5s"
+    labels:
+      service: "hotel"
+      test_type: "business_flow"
+      flow: "hotel_search"
+
+  - name: "taxi_availability_check"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com/api/v1/taxi/availability?lat=40.7128&lng=-74.0060"
+    interval: "1m"
+    timeout: "5s"
+    labels:
+      service: "taxi"
+      test_type: "business_flow"
+      flow: "availability_check"
+
+  # Infrastructure Tests
+  - name: "database_connectivity"
+    type: "postgres_connect"
+    target: "postgres.yourplatform.com:5432"
+    interval: "1m"
+    timeout: "5s"
+    labels:
+      component: "database"
+      test_type: "infrastructure"
+
+  - name: "redis_connectivity"
+    type: "redis_connect"
+    target: "redis.yourplatform.com:6379"
+    interval: "1m"
+    timeout: "5s"
+    labels:
+      component: "cache"
+      test_type: "infrastructure"
+
+  - name: "rabbitmq_management"
+    type: "rabbitmq_management"
+    target: "https://rabbitmq.yourplatform.com:15672/api/overview"
+    interval: "2m"
+    timeout: "5s"
+    labels:
+      component: "messaging"
+      test_type: "infrastructure"
+
+  - name: "elasticsearch_health"
+    type: "elasticsearch_health"
+    target: "https://elasticsearch.yourplatform.com:9200/_cluster/health"
+    interval: "1m"
+    timeout: "5s"
+    labels:
+      component: "search"
+      test_type: "infrastructure"
+
+  # DNS and Network Tests
+  - name: "dns_resolution"
+    type: "dns"
+    target: "api.yourplatform.com"
+    interval: "1m"
+    timeout: "5s"
+    labels:
+      component: "dns"
+      test_type: "infrastructure"
+
+  - name: "ssl_certificate_check"
+    type: "http_2xx"
+    target: "https://api.yourplatform.com"
+    interval: "1h"
+    timeout: "10s"
+    labels:
+      component: "ssl"
+      test_type: "security"
+
+  # CDN and Static Assets
+  - name: "cdn_static_assets"
+    type: "http_2xx"
+    target: "https://cdn.yourplatform.com/assets/logo.png"
+    interval: "5m"
+    timeout: "10s"
+    labels:
+      component: "cdn"
+      test_type: "performance"
+
+  # Third-party Integrations
+  - name: "stripe_connectivity"
+    type: "http_2xx"
+    target: "https://api.stripe.com/v1/charges"
+    interval: "5m"
+    timeout: "10s"
+    headers:
+      Authorization: "Bearer sk_test_..."
+    labels:
+      component: "payment_gateway"
+      test_type: "integration"
+      provider: "stripe"
+
+# Alerting rules for synthetic tests
+alerting_rules:
+  - name: "synthetic_test_failure"
+    condition: "probe_success == 0"
+    duration: "2m"
+    severity: "critical"
+    message: "Synthetic test {{$labels.job}} is failing"
+
+  - name: "synthetic_test_high_latency"
+    condition: "probe_duration_seconds > 5"
+    duration: "5m"
+    severity: "warning"
+    message: "Synthetic test {{$labels.job}} has high latency"
+
+  - name: "ssl_certificate_expiry"
+    condition: "probe_ssl_earliest_cert_expiry - time() < 86400 * 7"
+    duration: "1h"
+    severity: "warning"
+    message: "SSL certificate for {{$labels.instance}} expires in less than 7 days"

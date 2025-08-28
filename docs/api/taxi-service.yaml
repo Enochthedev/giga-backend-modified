@@ -1,0 +1,390 @@
+openapi: 3.0.3
+info:
+  title: Taxi Service API
+  description: |
+    Ride booking and management service with real-time tracking.
+    Supports driver management, ride matching, and location tracking similar to Uber.
+  version: 1.0.0
+  contact:
+    name: Platform Team
+    email: platform@company.com
+
+servers:
+  - url: http://localhost:3004
+    description: Development server
+  - url: https://api-staging.company.com/taxi
+    description: Staging server
+  - url: https://api.company.com/taxi
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /rides:
+    post:
+      summary: Request a ride
+      tags: [Rides]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RideRequest'
+      responses:
+        '201':
+          description: Ride requested successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ride'
+
+    get:
+      summary: Get user's ride history
+      tags: [Rides]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Ride history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideHistoryResponse'
+
+  /rides/{rideId}:
+    get:
+      summary: Get ride details
+      tags: [Rides]
+      parameters:
+        - name: rideId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ride details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RideDetails'
+
+  /rides/{rideId}/cancel:
+    post:
+      summary: Cancel a ride
+      tags: [Rides]
+      parameters:
+        - name: rideId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Ride cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ride'
+
+  /drivers:
+    post:
+      summary: Register as driver
+      tags: [Drivers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverRegistrationRequest'
+      responses:
+        '201':
+          description: Driver registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+
+  /drivers/profile:
+    get:
+      summary: Get driver profile
+      tags: [Drivers]
+      responses:
+        '200':
+          description: Driver profile retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Driver'
+
+  /drivers/location:
+    post:
+      summary: Update driver location
+      tags: [Drivers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LocationUpdate'
+      responses:
+        '200':
+          description: Location updated successfully
+
+  /drivers/status:
+    post:
+      summary: Update driver availability status
+      tags: [Drivers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DriverStatusUpdate'
+      responses:
+        '200':
+          description: Status updated successfully
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+        version:
+          type: string
+          example: "1.0.0"
+
+    RideRequest:
+      type: object
+      required:
+        - pickupLocation
+        - dropoffLocation
+        - rideType
+      properties:
+        pickupLocation:
+          $ref: '#/components/schemas/Location'
+        dropoffLocation:
+          $ref: '#/components/schemas/Location'
+        rideType:
+          type: string
+          enum: [economy, premium, luxury]
+          example: "economy"
+        scheduledTime:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          example: "Please call when you arrive"
+
+    Ride:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "ride_123456"
+        userId:
+          type: string
+          example: "user_123456"
+        driverId:
+          type: string
+          example: "driver_123456"
+        status:
+          type: string
+          enum: [requested, matched, pickup, in_progress, completed, cancelled]
+          example: "matched"
+        pickupLocation:
+          $ref: '#/components/schemas/Location'
+        dropoffLocation:
+          $ref: '#/components/schemas/Location'
+        rideType:
+          type: string
+          example: "economy"
+        estimatedFare:
+          type: number
+          example: 15.50
+        actualFare:
+          type: number
+          example: 16.25
+        distance:
+          type: number
+          example: 5.2
+        duration:
+          type: integer
+          example: 18
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+
+    Location:
+      type: object
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          example: 40.7128
+        longitude:
+          type: number
+          example: -74.0060
+        address:
+          type: string
+          example: "123 Main St, New York, NY 10001"
+
+    Driver:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "driver_123456"
+        userId:
+          type: string
+          example: "user_123456"
+        licenseNumber:
+          type: string
+          example: "DL123456789"
+        vehicleInfo:
+          $ref: '#/components/schemas/Vehicle'
+        rating:
+          type: number
+          example: 4.8
+        totalRides:
+          type: integer
+          example: 1250
+        status:
+          type: string
+          enum: [offline, available, busy]
+          example: "available"
+        currentLocation:
+          $ref: '#/components/schemas/Location'
+
+    Vehicle:
+      type: object
+      properties:
+        make:
+          type: string
+          example: "Toyota"
+        model:
+          type: string
+          example: "Camry"
+        year:
+          type: integer
+          example: 2020
+        color:
+          type: string
+          example: "Silver"
+        licensePlate:
+          type: string
+          example: "ABC123"
+
+    DriverRegistrationRequest:
+      type: object
+      required:
+        - licenseNumber
+        - vehicleInfo
+      properties:
+        licenseNumber:
+          type: string
+          example: "DL123456789"
+        vehicleInfo:
+          $ref: '#/components/schemas/Vehicle'
+
+    LocationUpdate:
+      type: object
+      required:
+        - latitude
+        - longitude
+      properties:
+        latitude:
+          type: number
+          example: 40.7128
+        longitude:
+          type: number
+          example: -74.0060
+
+    DriverStatusUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [offline, available, busy]
+          example: "available"
+
+    RideDetails:
+      allOf:
+        - $ref: '#/components/schemas/Ride'
+        - type: object
+          properties:
+            driver:
+              $ref: '#/components/schemas/Driver'
+            route:
+              type: array
+              items:
+                $ref: '#/components/schemas/Location'
+
+    RideHistoryResponse:
+      type: object
+      properties:
+        rides:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ride'
+        pagination:
+          type: object
+          properties:
+            page:
+              type: integer
+            limit:
+              type: integer
+            total:
+              type: integer
+            totalPages:
+              type: integer
+
+tags:
+  - name: Health
+    description: Service health endpoints
+  - name: Rides
+    description: Ride booking and management
+  - name: Drivers
+    description: Driver management and operations

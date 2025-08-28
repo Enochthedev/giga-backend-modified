@@ -1,0 +1,162 @@
+openapi: 3.0.3
+info:
+  title: Hotel Service API
+  description: |
+    Property booking and management service.
+    Supports property listings, booking management, and reviews similar to Airbnb.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3005
+    description: Development server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+
+  /properties:
+    get:
+      summary: Search properties
+      tags: [Properties]
+      security: []
+      parameters:
+        - name: location
+          in: query
+          schema:
+            type: string
+        - name: checkIn
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: checkOut
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: guests
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: minPrice
+          in: query
+          schema:
+            type: number
+        - name: maxPrice
+          in: query
+          schema:
+            type: number
+      responses:
+        '200':
+          description: Properties retrieved successfully
+
+    post:
+      summary: Create new property listing
+      tags: [Properties]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePropertyRequest'
+      responses:
+        '201':
+          description: Property created successfully
+
+  /properties/{propertyId}:
+    get:
+      summary: Get property details
+      tags: [Properties]
+      security: []
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Property details retrieved
+
+  /bookings:
+    post:
+      summary: Create booking
+      tags: [Bookings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBookingRequest'
+      responses:
+        '201':
+          description: Booking created successfully
+
+    get:
+      summary: Get user bookings
+      tags: [Bookings]
+      responses:
+        '200':
+          description: Bookings retrieved successfully
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    CreatePropertyRequest:
+      type: object
+      required:
+        - title
+        - description
+        - location
+        - pricePerNight
+        - maxGuests
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        location:
+          type: object
+        pricePerNight:
+          type: number
+        maxGuests:
+          type: integer
+
+    CreateBookingRequest:
+      type: object
+      required:
+        - propertyId
+        - checkIn
+        - checkOut
+        - guests
+      properties:
+        propertyId:
+          type: string
+        checkIn:
+          type: string
+          format: date
+        checkOut:
+          type: string
+          format: date
+        guests:
+          type: integer
+
+tags:
+  - name: Health
+  - name: Properties
+  - name: Bookings

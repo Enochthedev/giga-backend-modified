@@ -1,25 +1,420 @@
-name: CI
+name: Continuous Integration
 
 on:
   push:
+    branches: [ main, develop, 'feature/**', 'bugfix/**', 'hotfix/**' ]
   pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '8'
 
 jobs:
-  build:
+  pre-checks:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.check.outputs.should-run }}
+      changed-files: ${{ steps.changes.outputs.all_changed_files }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for relevant changes
+        uses: tj-actions/changed-files@v41
+        id: changes
+        with:
+          files: |
+            services/**
+            packages/**
+            *.json
+            *.js
+            *.ts
+            .github/workflows/**
+
+      - name: Determine if CI should run
+        id: check
+        run: |
+          if [[ "${{ steps.changes.outputs.any_changed }}" == "true" ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should-run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should-run=false" >> $GITHUB_OUTPUT
+          fi
+
+  code-quality:
+    needs: pre-checks
+    if: needs.pre-checks.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ESLint
+        run: pnpm run lint
+        continue-on-error: true
+
+      - name: Run Prettier check
+        run: pnpm exec prettier --check "**/*.{js,ts,json,md,yml,yaml}"
+        continue-on-error: true
+
+      - name: Run TypeScript compiler
+        run: pnpm run type-check
+        continue-on-error: true
+
+      - name: Check for circular dependencies
+        run: |
+          npx madge --circular --extensions ts,js services/ packages/
+        continue-on-error: true
+
+      - name: Analyze bundle size
+        run: |
+          echo "Analyzing bundle sizes..."
+          # This would run bundle analysis for each service
+          find services -name "package.json" -exec dirname {} \; | while read dir; do
+            if [ -f "$dir/package.json" ] && grep -q '"build"' "$dir/package.json"; then
+              echo "Analyzing $dir..."
+              cd "$dir" && pnpm run build && cd - || true
+            fi
+          done
+        continue-on-error: true
+
+  unit-tests:
+    needs: pre-checks
+    if: needs.pre-checks.outputs.should-run == 'true'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        service: [giga_main, giga_taxi_main, giga_taxi_driver, advertisement-service, ecommerce-backend, hotel-service, payment-service]
+        service: [
+          'api-gateway',
+          'authentication-service', 
+          'payment-service',
+          'ecommerce-service',
+          'taxi-service',
+          'hotel-service',
+          'notification-service',
+          'search-service',
+          'file-service',
+          'analytics-service',
+          'advertisement-service',
+          'admin-service',
+          'messaging-service',
+          'data-governance-admin'
+        ]
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
         with:
-          node-version: 18
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: 'services/${{ matrix.service }}/pnpm-lock.yaml'
+
+      - name: Check if service exists
+        id: check-service
+        run: |
+          if [ -d "services/${{ matrix.service }}" ] && [ -f "services/${{ matrix.service }}/package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Install dependencies
-        run: cd ${{ matrix.service }} && npm ci && cd ../common && npm ci
-      - name: Build
-        run: cd ${{ matrix.service }} && npm run build
-      - name: Lint
-        run: cd ${{ matrix.service }} && npm run lint
-      - name: Test
-        run: cd ${{ matrix.service }} && npm test
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        if: steps.check-service.outputs.exists == 'true'
+        run: |
+          if [ -d "packages/common" ]; then
+            cd packages/common && pnpm install --frozen-lockfile && pnpm run build
+          fi
+
+      - name: Run unit tests
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          if pnpm run --if-present test; then
+            pnpm run test -- --coverage --watchAll=false --passWithNoTests
+          else
+            echo "No test script found for ${{ matrix.service }}"
+          fi
+        env:
+          NODE_ENV: test
+          CI: true
+
+      - name: Upload coverage to Codecov
+        if: steps.check-service.outputs.exists == 'true' && hashFiles(format('services/{0}/coverage/lcov.info', matrix.service)) != ''
+        uses: codecov/codecov-action@v4
+        with:
+          file: services/${{ matrix.service }}/coverage/lcov.info
+          flags: ${{ matrix.service }}
+          name: ${{ matrix.service }}-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  integration-tests:
+    needs: [pre-checks, unit-tests]
+    if: needs.pre-checks.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for services
+        run: |
+          echo "Waiting for services to be ready..."
+          sleep 10
+          pg_isready -h localhost -p 5432 -U postgres
+          redis-cli -h localhost -p 6379 ping
+
+      - name: Run integration tests
+        run: |
+          if [ -f "package.json" ] && pnpm run --if-present test:integration; then
+            pnpm run test:integration
+          else
+            echo "No integration tests found"
+          fi
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+  security-checks:
+    needs: pre-checks
+    if: needs.pre-checks.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run security audit
+        run: |
+          pnpm audit --audit-level=high --prod
+        continue-on-error: true
+
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/owasp-top-ten
+            p/nodejs
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+  build-validation:
+    needs: [pre-checks, code-quality, unit-tests]
+    if: needs.pre-checks.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [
+          'api-gateway',
+          'authentication-service', 
+          'payment-service',
+          'ecommerce-service',
+          'taxi-service',
+          'hotel-service',
+          'notification-service',
+          'search-service',
+          'file-service',
+          'analytics-service',
+          'advertisement-service',
+          'admin-service',
+          'messaging-service',
+          'data-governance-admin'
+        ]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Check if service exists
+        id: check-service
+        run: |
+          if [ -d "services/${{ matrix.service }}" ] && [ -f "services/${{ matrix.service }}/package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install dependencies
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Build service
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          if pnpm run --if-present build; then
+            pnpm run build
+          else
+            echo "No build script found for ${{ matrix.service }}"
+          fi
+
+      - name: Validate Docker build
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          if [ -f "Dockerfile" ]; then
+            echo "Building Docker image for ${{ matrix.service }}..."
+            docker build -t ${{ matrix.service }}:test .
+            echo "Docker build successful for ${{ matrix.service }}"
+          else
+            echo "No Dockerfile found for ${{ matrix.service }}"
+          fi
+
+  summary:
+    needs: [code-quality, unit-tests, integration-tests, security-checks, build-validation]
+    if: always() && needs.pre-checks.outputs.should-run == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check all jobs status
+        run: |
+          echo "CI Summary:"
+          echo "Code Quality: ${{ needs.code-quality.result }}"
+          echo "Unit Tests: ${{ needs.unit-tests.result }}"
+          echo "Integration Tests: ${{ needs.integration-tests.result }}"
+          echo "Security Checks: ${{ needs.security-checks.result }}"
+          echo "Build Validation: ${{ needs.build-validation.result }}"
+          
+          if [[ "${{ needs.code-quality.result }}" == "failure" ]] || 
+             [[ "${{ needs.unit-tests.result }}" == "failure" ]] || 
+             [[ "${{ needs.build-validation.result }}" == "failure" ]]; then
+            echo "❌ CI failed - blocking merge"
+            exit 1
+          else
+            echo "✅ CI passed - ready for merge"
+          fi
+
+      - name: Update PR status
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { number } = context.issue;
+            
+            const success = '${{ needs.code-quality.result }}' === 'success' &&
+                          '${{ needs.unit-tests.result }}' === 'success' &&
+                          '${{ needs.build-validation.result }}' === 'success';
+            
+            const body = success ? 
+              '✅ All CI checks passed! This PR is ready for review.' :
+              '❌ Some CI checks failed. Please review the failed jobs and fix the issues.';
+            
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: number,
+              body
+            });

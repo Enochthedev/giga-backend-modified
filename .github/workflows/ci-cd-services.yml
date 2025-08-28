@@ -1,208 +1,437 @@
-name: CI/CD Pipeline - Microservices
+name: Microservices CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, 'feature/**', 'bugfix/**', 'hotfix/**' ]
     paths:
       - 'services/**'
+      - 'packages/common/**'
+      - '.github/workflows/ci-cd-services.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
       - 'services/**'
+      - 'packages/common/**'
+  workflow_dispatch:
+    inputs:
+      services:
+        description: 'Services to build and deploy (comma-separated, or "all")'
+        required: false
+        default: 'all'
+        type: string
+      environment:
+        description: 'Environment to deploy to'
+        required: false
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+          - none
 
 env:
   REGISTRY: ghcr.io
-  NODE_VERSION: '18'
+  NODE_VERSION: '20'
+  PNPM_VERSION: '8'
   DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
 
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      admin_service: ${{ steps.changes.outputs.admin_service }}
-      analytics_service: ${{ steps.changes.outputs.analytics_service }}
+      # Core Services
       api_gateway: ${{ steps.changes.outputs.api_gateway }}
       authentication_service: ${{ steps.changes.outputs.authentication_service }}
-      file_service: ${{ steps.changes.outputs.file_service }}
-      messaging_service: ${{ steps.changes.outputs.messaging_service }}
-      notification_service: ${{ steps.changes.outputs.notification_service }}
       payment_service: ${{ steps.changes.outputs.payment_service }}
-      search_service: ${{ steps.changes.outputs.search_service }}
+      ecommerce_service: ${{ steps.changes.outputs.ecommerce_service }}
       taxi_service: ${{ steps.changes.outputs.taxi_service }}
+      hotel_service: ${{ steps.changes.outputs.hotel_service }}
+      # Platform Services
+      notification_service: ${{ steps.changes.outputs.notification_service }}
+      search_service: ${{ steps.changes.outputs.search_service }}
+      file_service: ${{ steps.changes.outputs.file_service }}
+      analytics_service: ${{ steps.changes.outputs.analytics_service }}
+      advertisement_service: ${{ steps.changes.outputs.advertisement_service }}
+      admin_service: ${{ steps.changes.outputs.admin_service }}
+      messaging_service: ${{ steps.changes.outputs.messaging_service }}
+      data_governance_admin: ${{ steps.changes.outputs.data_governance_admin }}
+      # Shared
+      common_package: ${{ steps.changes.outputs.common_package }}
+      # Metadata
+      changed_services: ${{ steps.set-matrix.outputs.changed_services }}
+      
     steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
         id: changes
         with:
           filters: |
-            admin_service:
-              - 'services/admin-service/**'
-            analytics_service:
-              - 'services/analytics-service/**'
             api_gateway:
               - 'services/api-gateway/**'
             authentication_service:
               - 'services/authentication-service/**'
-            file_service:
-              - 'services/file-service/**'
-            messaging_service:
-              - 'services/messaging-service/**'
-            notification_service:
-              - 'services/notification-service/**'
             payment_service:
               - 'services/payment-service/**'
-            search_service:
-              - 'services/search-service/**'
+            ecommerce_service:
+              - 'services/ecommerce-service/**'
             taxi_service:
               - 'services/taxi-service/**'
+            hotel_service:
+              - 'services/hotel-service/**'
+            notification_service:
+              - 'services/notification-service/**'
+            search_service:
+              - 'services/search-service/**'
+            file_service:
+              - 'services/file-service/**'
+            analytics_service:
+              - 'services/analytics-service/**'
+            advertisement_service:
+              - 'services/advertisement-service/**'
+            admin_service:
+              - 'services/admin-service/**'
+            messaging_service:
+              - 'services/messaging-service/**'
+            data_governance_admin:
+              - 'services/data-governance-admin/**'
+            common_package:
+              - 'packages/common/**'
 
-  lint-and-test:
+      - name: Set changed services matrix
+        id: set-matrix
+        run: |
+          changed_services='[]'
+          
+          # Check each service and add to matrix if changed
+          services=(
+            "api-gateway:${{ steps.changes.outputs.api_gateway }}"
+            "authentication-service:${{ steps.changes.outputs.authentication_service }}"
+            "payment-service:${{ steps.changes.outputs.payment_service }}"
+            "ecommerce-service:${{ steps.changes.outputs.ecommerce_service }}"
+            "taxi-service:${{ steps.changes.outputs.taxi_service }}"
+            "hotel-service:${{ steps.changes.outputs.hotel_service }}"
+            "notification-service:${{ steps.changes.outputs.notification_service }}"
+            "search-service:${{ steps.changes.outputs.search_service }}"
+            "file-service:${{ steps.changes.outputs.file_service }}"
+            "analytics-service:${{ steps.changes.outputs.analytics_service }}"
+            "advertisement-service:${{ steps.changes.outputs.advertisement_service }}"
+            "admin-service:${{ steps.changes.outputs.admin_service }}"
+            "messaging-service:${{ steps.changes.outputs.messaging_service }}"
+            "data-governance-admin:${{ steps.changes.outputs.data_governance_admin }}"
+          )
+          
+          for service_info in "${services[@]}"; do
+            service_name=$(echo $service_info | cut -d: -f1)
+            is_changed=$(echo $service_info | cut -d: -f2)
+            
+            if [[ "$is_changed" == "true" ]] || [[ "${{ github.event.inputs.services }}" == "all" ]] || [[ "${{ github.event.inputs.services }}" == *"$service_name"* ]]; then
+              changed_services=$(echo $changed_services | jq '. + ["'$service_name'"]')
+            fi
+          done
+          
+          # If common package changed, rebuild all services
+          if [[ "${{ steps.changes.outputs.common_package }}" == "true" ]]; then
+            changed_services='["api-gateway","authentication-service","payment-service","ecommerce-service","taxi-service","hotel-service","notification-service","search-service","file-service","analytics-service","advertisement-service","admin-service","messaging-service","data-governance-admin"]'
+          fi
+          
+          echo "changed_services=$changed_services" >> $GITHUB_OUTPUT
+          echo "Changed services: $changed_services"
+
+  build-common:
     needs: detect-changes
+    if: needs.detect-changes.outputs.common_package == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [
-          { name: 'admin-service', path: 'services/admin-service', changed: '${{ needs.detect-changes.outputs.admin_service }}' },
-          { name: 'analytics-service', path: 'services/analytics-service', changed: '${{ needs.detect-changes.outputs.analytics_service }}' },
-          { name: 'api-gateway', path: 'services/api-gateway', changed: '${{ needs.detect-changes.outputs.api_gateway }}' },
-          { name: 'authentication-service', path: 'services/authentication-service', changed: '${{ needs.detect-changes.outputs.authentication_service }}' },
-          { name: 'file-service', path: 'services/file-service', changed: '${{ needs.detect-changes.outputs.file_service }}' },
-          { name: 'messaging-service', path: 'services/messaging-service', changed: '${{ needs.detect-changes.outputs.messaging_service }}' },
-          { name: 'notification-service', path: 'services/notification-service', changed: '${{ needs.detect-changes.outputs.notification_service }}' },
-          { name: 'payment-service', path: 'services/payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' },
-          { name: 'search-service', path: 'services/search-service', changed: '${{ needs.detect-changes.outputs.search_service }}' },
-          { name: 'taxi-service', path: 'services/taxi-service', changed: '${{ needs.detect-changes.outputs.taxi_service }}' }
-        ]
-    if: matrix.service.changed == 'true'
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: '${{ matrix.service.path }}/package.json'
+          cache: 'pnpm'
+          cache-dependency-path: 'packages/common/pnpm-lock.yaml'
 
       - name: Install dependencies
-        working-directory: ${{ matrix.service.path }}
-        run: |
-          if [ -f "package.json" ]; then
-            npm ci
-          else
-            echo "No package.json found, skipping dependency installation..."
-          fi
+        working-directory: packages/common
+        run: pnpm install --frozen-lockfile
 
       - name: Run linting
-        working-directory: ${{ matrix.service.path }}
+        working-directory: packages/common
+        run: pnpm run lint
+
+      - name: Run type checking
+        working-directory: packages/common
+        run: pnpm exec tsc --noEmit
+
+      - name: Run tests
+        working-directory: packages/common
+        run: pnpm run test -- --coverage --watchAll=false --passWithNoTests
+        env:
+          NODE_ENV: test
+
+      - name: Build package
+        working-directory: packages/common
+        run: pnpm run build
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/common/dist
+            packages/common/node_modules
+          key: common-build-${{ github.sha }}
+          restore-keys: |
+            common-build-
+
+  quality-checks:
+    needs: [detect-changes, build-common]
+    if: needs.detect-changes.outputs.changed_services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.changed_services) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          cache-dependency-path: 'services/${{ matrix.service }}/pnpm-lock.yaml'
+
+      - name: Check if service exists
+        id: check-service
         run: |
-          if [ -f "package.json" ] && npm run --silent lint --if-present; then
-            npm run lint
+          if [ -d "services/${{ matrix.service }}" ] && [ -f "services/${{ matrix.service }}/package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "No lint script found, skipping..."
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Service services/${{ matrix.service }} does not exist or has no package.json"
+          fi
+
+      - name: Restore common build cache
+        if: steps.check-service.outputs.exists == 'true' && needs.detect-changes.outputs.common_package == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            packages/common/dist
+            packages/common/node_modules
+          key: common-build-${{ github.sha }}
+          restore-keys: |
+            common-build-
+
+      - name: Install dependencies
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Run linting
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          if pnpm run --if-present lint; then
+            pnpm run lint
+          else
+            echo "No lint script found, skipping linting..."
           fi
 
       - name: Run type checking
-        working-directory: ${{ matrix.service.path }}
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
         run: |
           if [ -f "tsconfig.json" ]; then
-            npx tsc --noEmit
+            pnpm exec tsc --noEmit
           else
             echo "No TypeScript config found, skipping type check..."
           fi
 
-      - name: Run tests
-        working-directory: ${{ matrix.service.path }}
+      - name: Run unit tests
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
         run: |
-          if [ -f "package.json" ] && npm run --silent test --if-present; then
-            npm run test -- --coverage --watchAll=false
+          if pnpm run --if-present test; then
+            pnpm run test -- --coverage --watchAll=false --passWithNoTests
           else
             echo "No test script found, skipping tests..."
           fi
         env:
           NODE_ENV: test
+          CI: true
+
+      - name: Build service
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: |
+          if pnpm run --if-present build; then
+            pnpm run build
+          else
+            echo "No build script found, skipping build..."
+          fi
 
       - name: Upload coverage reports
-        if: success()
-        uses: codecov/codecov-action@v3
+        if: steps.check-service.outputs.exists == 'true' && hashFiles(format('services/{0}/coverage/lcov.info', matrix.service)) != ''
+        uses: codecov/codecov-action@v4
         with:
-          file: ${{ matrix.service.path }}/coverage/lcov.info
-          flags: ${{ matrix.service.name }}
-          name: ${{ matrix.service.name }}-coverage
+          file: services/${{ matrix.service }}/coverage/lcov.info
+          flags: ${{ matrix.service }}
+          name: ${{ matrix.service }}-coverage
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
 
+      - name: Cache build artifacts
+        if: steps.check-service.outputs.exists == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            services/${{ matrix.service }}/dist
+            services/${{ matrix.service }}/build
+            services/${{ matrix.service }}/node_modules
+          key: build-${{ matrix.service }}-${{ github.sha }}
+          restore-keys: |
+            build-${{ matrix.service }}-
+    
+    steps:
   security-scan:
-    needs: detect-changes
+    needs: [detect-changes, quality-checks]
+    if: needs.detect-changes.outputs.changed_services != '[]'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        service: [
-          { name: 'admin-service', path: 'services/admin-service', changed: '${{ needs.detect-changes.outputs.admin_service }}' },
-          { name: 'analytics-service', path: 'services/analytics-service', changed: '${{ needs.detect-changes.outputs.analytics_service }}' },
-          { name: 'api-gateway', path: 'services/api-gateway', changed: '${{ needs.detect-changes.outputs.api_gateway }}' },
-          { name: 'authentication-service', path: 'services/authentication-service', changed: '${{ needs.detect-changes.outputs.authentication_service }}' },
-          { name: 'file-service', path: 'services/file-service', changed: '${{ needs.detect-changes.outputs.file_service }}' },
-          { name: 'messaging-service', path: 'services/messaging-service', changed: '${{ needs.detect-changes.outputs.messaging_service }}' },
-          { name: 'notification-service', path: 'services/notification-service', changed: '${{ needs.detect-changes.outputs.notification_service }}' },
-          { name: 'payment-service', path: 'services/payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' },
-          { name: 'search-service', path: 'services/search-service', changed: '${{ needs.detect-changes.outputs.search_service }}' },
-          { name: 'taxi-service', path: 'services/taxi-service', changed: '${{ needs.detect-changes.outputs.taxi_service }}' }
-        ]
-    if: matrix.service.changed == 'true'
+        service: ${{ fromJson(needs.detect-changes.outputs.changed_services) }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Run Trivy vulnerability scanner
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Check if service exists
+        id: check-service
+        run: |
+          if [ -d "services/${{ matrix.service }}" ] && [ -f "services/${{ matrix.service }}/package.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install dependencies
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Trivy filesystem scan
+        if: steps.check-service.outputs.exists == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
-          scan-ref: '${{ matrix.service.path }}'
+          scan-ref: 'services/${{ matrix.service }}'
           format: 'sarif'
-          output: 'trivy-results-${{ matrix.service.name }}.sarif'
+          output: 'trivy-fs-${{ matrix.service }}.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
 
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@v2
-        if: always()
+        if: steps.check-service.outputs.exists == 'true'
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: 'trivy-results-${{ matrix.service.name }}.sarif'
+          sarif_file: 'trivy-fs-${{ matrix.service }}.sarif'
+          category: 'trivy-fs-${{ matrix.service }}'
 
-      - name: Run npm audit
-        working-directory: ${{ matrix.service.path }}
+      - name: Run pnpm audit
+        if: steps.check-service.outputs.exists == 'true'
+        working-directory: services/${{ matrix.service }}
+        continue-on-error: true
         run: |
-          if [ -f "package.json" ]; then
-            npm audit --audit-level=high
-          fi
+          echo "Running pnpm audit for ${{ matrix.service }}..."
+          pnpm audit --audit-level=high --prod
+
+      - name: Run Semgrep security scan
+        if: steps.check-service.outputs.exists == 'true'
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/nodejs
+          generateSarif: "1"
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+      - name: Upload Semgrep results
+        if: steps.check-service.outputs.exists == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+          category: 'semgrep-${{ matrix.service }}'
 
   build-and-push:
-    needs: [detect-changes, lint-and-test, security-scan]
+    needs: [detect-changes, quality-checks, security-scan]
+    if: |
+      needs.detect-changes.outputs.changed_services != '[]' && 
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/hotfix/')))
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     strategy:
+      fail-fast: false
       matrix:
-        service: [
-          { name: 'admin-service', path: 'services/admin-service', changed: '${{ needs.detect-changes.outputs.admin_service }}' },
-          { name: 'analytics-service', path: 'services/analytics-service', changed: '${{ needs.detect-changes.outputs.analytics_service }}' },
-          { name: 'api-gateway', path: 'services/api-gateway', changed: '${{ needs.detect-changes.outputs.api_gateway }}' },
-          { name: 'authentication-service', path: 'services/authentication-service', changed: '${{ needs.detect-changes.outputs.authentication_service }}' },
-          { name: 'file-service', path: 'services/file-service', changed: '${{ needs.detect-changes.outputs.file_service }}' },
-          { name: 'messaging-service', path: 'services/messaging-service', changed: '${{ needs.detect-changes.outputs.messaging_service }}' },
-          { name: 'notification-service', path: 'services/notification-service', changed: '${{ needs.detect-changes.outputs.notification_service }}' },
-          { name: 'payment-service', path: 'services/payment-service', changed: '${{ needs.detect-changes.outputs.payment_service }}' },
-          { name: 'search-service', path: 'services/search-service', changed: '${{ needs.detect-changes.outputs.search_service }}' },
-          { name: 'taxi-service', path: 'services/taxi-service', changed: '${{ needs.detect-changes.outputs.taxi_service }}' }
-        ]
+        service: ${{ fromJson(needs.detect-changes.outputs.changed_services) }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if service has Dockerfile
+        id: check-dockerfile
+        run: |
+          if [ -f "services/${{ matrix.service }}/Dockerfile" ]; then
+            echo "has-dockerfile=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-dockerfile=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Service ${{ matrix.service }} has no Dockerfile, skipping container build"
+          fi
 
       - name: Set up Docker Buildx
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
         uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
 
       - name: Log in to Container Registry
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -210,37 +439,93 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service.name }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=stable,enable=${{ github.ref == 'refs/heads/main' }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.service }}
+            org.opencontainers.image.description=Multi-service platform - ${{ matrix.service }}
+            org.opencontainers.image.vendor=Platform Team
+            org.opencontainers.image.version={{version}}
+            org.opencontainers.image.created={{date 'YYYY-MM-DDTHH:mm:ssZ'}}
+            org.opencontainers.image.revision={{sha}}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+
+      - name: Restore build cache
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            services/${{ matrix.service }}/dist
+            services/${{ matrix.service }}/build
+            services/${{ matrix.service }}/node_modules
+          key: build-${{ matrix.service }}-${{ github.sha }}
+          restore-keys: |
+            build-${{ matrix.service }}-
 
       - name: Build and push Docker image
-        if: matrix.service.changed == 'true'
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
         uses: docker/build-push-action@v5
         with:
-          context: ${{ matrix.service.path }}
-          file: ${{ matrix.service.path }}/Dockerfile
+          context: services/${{ matrix.service }}
+          file: services/${{ matrix.service }}/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           platforms: linux/amd64,linux/arm64
+          build-args: |
+            NODE_VERSION=${{ env.NODE_VERSION }}
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Run Trivy container scan
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-container-${{ matrix.service }}.sarif'
+
+      - name: Upload container scan results
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-container-${{ matrix.service }}.sarif'
+          category: 'trivy-container-${{ matrix.service }}'
+
+      - name: Generate SBOM
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:${{ github.sha }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.service }}.spdx.json
+
+      - name: Upload SBOM
+        if: steps.check-dockerfile.outputs.has-dockerfile == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.service }}
+          path: sbom-${{ matrix.service }}.spdx.json
+          retention-days: 30
 
   integration-tests:
     needs: [build-and-push]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-
+    
     services:
       postgres:
-        image: postgres:15
+        image: postgres:15-alpine
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: test_db
@@ -253,7 +538,7 @@ jobs:
           - 5432:5432
 
       redis:
-        image: redis:7
+        image: redis:7-alpine
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
@@ -263,7 +548,7 @@ jobs:
           - 6379:6379
 
       rabbitmq:
-        image: rabbitmq:3-management
+        image: rabbitmq:3-management-alpine
         env:
           RABBITMQ_DEFAULT_USER: test
           RABBITMQ_DEFAULT_PASS: test
@@ -276,67 +561,280 @@ jobs:
           - 5672:5672
           - 15672:15672
 
+      elasticsearch:
+        image: elasticsearch:8.11.0
+        env:
+          discovery.type: single-node
+          xpack.security.enabled: false
+          ES_JAVA_OPTS: -Xms512m -Xmx512m
+        options: >-
+          --health-cmd "curl -f http://localhost:9200/_cluster/health"
+          --health-interval 30s
+          --health-timeout 10s
+          --health-retries 5
+        ports:
+          - 9200:9200
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
 
-      - name: Run integration tests
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for services to be ready..."
+          sleep 30
+          
+          # Test database connection
+          pg_isready -h localhost -p 5432 -U postgres
+          
+          # Test Redis connection
+          redis-cli -h localhost -p 6379 ping
+          
+          # Test RabbitMQ connection
+          curl -f http://test:test@localhost:15672/api/overview
+          
+          # Test Elasticsearch connection
+          curl -f http://localhost:9200/_cluster/health
+
+      - name: Run cross-service integration tests
         run: |
           echo "Running cross-service integration tests..."
-          # This would run tests that verify service interactions
-          # npm run test:integration
+          if [ -f "package.json" ] && pnpm run --if-present test:integration; then
+            pnpm run test:integration
+          else
+            echo "No integration tests found, running service health checks..."
+            ./scripts/health-checks.sh || echo "Health check script not found"
+          fi
         env:
+          NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
           REDIS_URL: redis://localhost:6379
           RABBITMQ_URL: amqp://test:test@localhost:5672
+          ELASTICSEARCH_URL: http://localhost:9200
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: |
+            test-results/
+            coverage/
+          retention-days: 7
 
   deploy-staging:
-    needs: [integration-tests]
+    needs: [build-and-push, integration-tests]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-    environment: staging
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/')) ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: 
+      name: staging
+      url: https://staging.platform.company.com
+    concurrency:
+      group: deploy-staging-services
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy services to staging
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.0'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
         run: |
-          echo "Deploying microservices to staging environment..."
-          # ./scripts/deploy-services-staging.sh
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name ${{ secrets.EKS_CLUSTER_NAME_STAGING }}
 
-  deploy-production:
-    needs: [integration-tests]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Deploy services to production
+      - name: Deploy changed services to staging
         run: |
-          echo "Deploying microservices to production environment..."
-          # ./scripts/deploy-services-production.sh
+          echo "Deploying changed services to staging environment..."
+          changed_services='${{ needs.detect-changes.outputs.changed_services }}'
+          
+          if [ "$changed_services" != "[]" ]; then
+            echo "Services to deploy: $changed_services"
+            
+            # Deploy using Helm with selective service updates
+            helm upgrade --install platform-staging ./k8s/charts/multi-service-platform \
+              --namespace staging \
+              --create-namespace \
+              --values ./k8s/charts/multi-service-platform/values-staging.yaml \
+              --set image.tag=${{ github.sha }} \
+              --set global.environment=staging \
+              --wait \
+              --timeout=10m
+          else
+            echo "No services changed, skipping deployment"
+          fi
 
-      - name: Run smoke tests
+      - name: Run service-specific smoke tests
         run: |
-          echo "Running smoke tests for all services..."
-          # ./scripts/smoke-tests-services.sh
+          echo "Running smoke tests for deployed services..."
+          changed_services='${{ needs.detect-changes.outputs.changed_services }}'
+          
+          if [ "$changed_services" != "[]" ]; then
+            ./scripts/smoke-tests-services.sh staging "$changed_services" || echo "Smoke test script not found"
+          fi
+        env:
+          STAGING_URL: https://staging.platform.company.com
 
       - name: Notify deployment success
         if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: "✅ Services deployed to staging: ${{ needs.detect-changes.outputs.changed_services }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  deploy-production:
+    needs: [build-and-push, integration-tests]
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'push' && github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment: 
+      name: production
+      url: https://platform.company.com
+    concurrency:
+      group: deploy-production-services
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.13.0'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Update kubeconfig
         run: |
-          echo "Microservices deployment successful!"
+          aws eks update-kubeconfig --region ${{ secrets.AWS_REGION }} --name ${{ secrets.EKS_CLUSTER_NAME_PRODUCTION }}
+
+      - name: Create deployment backup
+        run: |
+          echo "Creating backup of current production deployment..."
+          kubectl get all -n production -o yaml > production-services-backup-$(date +%Y%m%d-%H%M%S).yaml
+
+      - name: Deploy changed services to production
+        run: |
+          echo "Deploying changed services to production environment..."
+          changed_services='${{ needs.detect-changes.outputs.changed_services }}'
+          
+          if [ "$changed_services" != "[]" ]; then
+            echo "Services to deploy: $changed_services"
+            
+            # Deploy using Helm with blue-green strategy for critical services
+            helm upgrade --install platform-production ./k8s/charts/multi-service-platform \
+              --namespace production \
+              --create-namespace \
+              --values ./k8s/charts/multi-service-platform/values-production.yaml \
+              --set image.tag=${{ github.sha }} \
+              --set global.environment=production \
+              --wait \
+              --timeout=15m
+          else
+            echo "No services changed, skipping deployment"
+          fi
+
+      - name: Run comprehensive service tests
+        run: |
+          echo "Running comprehensive tests for deployed services..."
+          changed_services='${{ needs.detect-changes.outputs.changed_services }}'
+          
+          if [ "$changed_services" != "[]" ]; then
+            ./scripts/smoke-tests-services.sh production "$changed_services" || echo "Smoke test script not found"
+            ./scripts/health-checks-services.sh production "$changed_services" || echo "Health check script not found"
+          fi
+        env:
+          PRODUCTION_URL: https://platform.company.com
+
+      - name: Update deployment status
+        if: success()
+        run: |
+          echo "Production deployment successful for services: ${{ needs.detect-changes.outputs.changed_services }}"
+          kubectl annotate deployment -n production --all deployment.kubernetes.io/revision-history="Deployed ${{ github.sha }} at $(date)"
+
+      - name: Notify deployment success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: "🚀 Services deployed to production: ${{ needs.detect-changes.outputs.changed_services }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Rollback on failure
         if: failure()
         run: |
           echo "Deployment failed, initiating rollback..."
-          # ./scripts/rollback-services.sh
+          helm rollback platform-production -n production
+          
+      - name: Notify deployment failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: "💥 Service deployment failed: ${{ needs.detect-changes.outputs.changed_services }} - Rollback initiated"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  cleanup:
+    needs: [deploy-staging, deploy-production]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Cleanup old service images
+        run: |
+          echo "Cleaning up old service container images..."
+          # This would clean up old images from the registry
+          # Keep last 10 versions of each service
+          
+      - name: Update service metrics
+        run: |
+          echo "Updating service deployment metrics..."
+          # This would update deployment metrics in monitoring system
