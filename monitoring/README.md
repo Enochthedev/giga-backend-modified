@@ -70,7 +70,7 @@ Analytics Service:   http://localhost:8006/metrics
 
 1. **Install dependencies** in your service:
 ```bash
-npm install prom-client @opentelemetry/sdk-node @opentelemetry/auto-instrumentations-node
+pnpm install prom-client @opentelemetry/sdk-node @opentelemetry/auto-instrumentations-node
 ```
 
 2. **Use the common monitoring package**:

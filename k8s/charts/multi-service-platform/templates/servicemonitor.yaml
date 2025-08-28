@@ -1,32 +1,94 @@
 {{- if .Values.serviceMonitor.enabled }}
-{{- range $service := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" }}
-{{- $config := index $.Values $service }}
-{{- if $config.enabled }}
+{{- $services := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" -}}
+{{- range $serviceName := $services -}}
+{{- $serviceConfig := index $.Values $serviceName -}}
+{{- if $serviceConfig.enabled -}}
+{{- $kebabServiceName := $serviceName | replace "Service" "-service" | replace "apiGateway" "api-gateway" | replace "authenticationService" "authentication-service" | replace "ecommerceService" "ecommerce-service" | replace "paymentService" "payment-service" | replace "taxiService" "taxi-service" | replace "hotelService" "hotel-service" | replace "advertisementService" "advertisement-service" | replace "notificationService" "notification-service" | replace "fileService" "file-service" | replace "searchService" "search-service" }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ $service | kebabcase }}-metrics
-  namespace: {{ $.Values.serviceMonitor.namespace | default $.Release.Namespace }}
+  name: {{ $kebabServiceName }}-monitor
+  namespace: {{ $.Values.serviceMonitor.namespace | default "monitoring" }}
+  labels:
+    {{- include "multi-service-platform.serviceLabels" (dict "serviceName" $kebabServiceName "context" $) | nindent 4 }}
+    {{- with $.Values.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ $kebabServiceName }}
+  namespaceSelector:
+    matchNames:
+    - {{ $.Values.namespace | default "multi-service-platform" }}
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: {{ $.Values.serviceMonitor.interval | default "30s" }}
+    scrapeTimeout: {{ $.Values.serviceMonitor.scrapeTimeout | default "10s" }}
+    honorLabels: true
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'go_.*'
+      action: drop
+    - sourceLabels: [__name__]
+      regex: 'process_.*'
+      action: drop
+    - sourceLabels: [__name__]
+      regex: 'nodejs_.*'
+      action: drop
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_service_name]
+      targetLabel: service
+    - sourceLabels: [__meta_kubernetes_namespace]
+      targetLabel: namespace
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod
+{{- end }}
+{{- end }}
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "multi-service-platform.fullname" $ }}-platform-monitor
+  namespace: {{ $.Values.serviceMonitor.namespace | default "monitoring" }}
   labels:
     {{- include "multi-service-platform.labels" $ | nindent 4 }}
     {{- with $.Values.serviceMonitor.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
-    app.kubernetes.io/component: {{ $service | kebabcase }}
 spec:
   selector:
     matchLabels:
       {{- include "multi-service-platform.selectorLabels" $ | nindent 6 }}
-      app.kubernetes.io/component: {{ $service | kebabcase }}
+  namespaceSelector:
+    matchNames:
+    - {{ $.Values.namespace | default "multi-service-platform" }}
   endpoints:
   - port: http
     path: /metrics
-    interval: 30s
-    scrapeTimeout: 10s
-  namespaceSelector:
-    matchNames:
-    - {{ $.Release.Namespace }}
-{{- end }}
-{{- end }}
+    interval: {{ $.Values.serviceMonitor.interval | default "30s" }}
+    scrapeTimeout: {{ $.Values.serviceMonitor.scrapeTimeout | default "10s" }}
+    honorLabels: true
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'platform_.*'
+      action: keep
+    - sourceLabels: [__name__]
+      regex: 'http_.*'
+      action: keep
+    - sourceLabels: [__name__]
+      regex: 'nodejs_heap_.*'
+      action: keep
+    relabelings:
+    - sourceLabels: [__meta_kubernetes_service_name]
+      targetLabel: service
+    - sourceLabels: [__meta_kubernetes_namespace]
+      targetLabel: namespace
+    - sourceLabels: [__meta_kubernetes_pod_name]
+      targetLabel: pod
+    - targetLabel: platform
+      replacement: multi-service-platform
 {{- end }}

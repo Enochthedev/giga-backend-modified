@@ -10,6 +10,98 @@ app:
   version: "1.0.0"
   environment: production
 
+# Namespace configuration
+namespace: multi-service-platform
+
+# Service Account configuration
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+# RBAC configuration
+rbac:
+  create: true
+  clusterRole: false
+
+# Istio service mesh configuration
+istio:
+  enabled: false
+  gateway:
+    enabled: false
+    hosts:
+      - "*"
+  virtualService:
+    enabled: false
+  destinationRule:
+    enabled: false
+
+# Security configuration
+security:
+  jwtSecret: "your-super-secret-jwt-key"
+  jwtRefreshSecret: "your-super-secret-refresh-key"
+  encryptionKey: "your-32-character-encryption-key"
+  corsOrigin: "*"
+  rateLimit:
+    window: "15"
+    max: "100"
+
+# Logging configuration
+logging:
+  level: "info"
+  format: "json"
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+
+# Feature flags
+featureFlags:
+  newUserInterface: true
+  advancedAnalytics: false
+  betaFeatures: false
+
+# External services configuration
+externalServices:
+  stripe:
+    enabled: false
+    secretKey: ""
+    webhookSecret: ""
+  sendgrid:
+    enabled: false
+    apiKey: ""
+  twilio:
+    enabled: false
+    accountSid: ""
+    authToken: ""
+  aws:
+    enabled: false
+    accessKeyId: ""
+    secretAccessKey: ""
+    region: "us-east-1"
+  gcp:
+    enabled: false
+    projectId: ""
+    serviceAccountKey: ""
+
+# OAuth configuration
+oauth:
+  google:
+    enabled: false
+    clientId: ""
+    clientSecret: ""
+  facebook:
+    enabled: false
+    appId: ""
+    appSecret: ""
+  apple:
+    enabled: false
+    clientId: ""
+    teamId: ""
+    keyId: ""
+    privateKey: ""
+
 # API Gateway configuration
 apiGateway:
   enabled: true
@@ -255,21 +347,27 @@ searchService:
 ingress:
   enabled: true
   className: "nginx"
+  directServiceAccess: false
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
   hosts:
     - host: api.yourplatform.com
-      paths:
-        - path: /
-          pathType: Prefix
-          service: api-gateway-service
-          port: 3000
   tls:
     - secretName: platform-tls
       hosts:
         - api.yourplatform.com
+  admin:
+    enabled: false
+    allowedIPs: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    annotations: {}
+    hosts:
+      - host: admin.yourplatform.com
+    tls:
+      - secretName: admin-platform-tls
+        hosts:
+          - admin.yourplatform.com
 
 # Database configurations
 postgresql:
@@ -351,4 +449,156 @@ networkPolicy:
   ingress:
     enabled: true
   egress:
+    enabled: true# Admin
+ Service configuration
+adminService:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: multi-service-platform/admin-service
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3010
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+
+# Analytics Service configuration
+analyticsService:
+  enabled: false
+  replicaCount: 2
+  image:
+    repository: multi-service-platform/analytics-service
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3011
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+  autoscaling:
     enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+  persistence:
+    enabled: false
+    size: 10Gi
+    mountPath: /data
+
+# Messaging Service configuration
+messagingService:
+  enabled: false
+  replicaCount: 2
+  image:
+    repository: multi-service-platform/messaging-service
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3012
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# Pod Disruption Budget configuration
+podDisruptionBudget:
+  enabled: true
+  minAvailable: null
+  maxUnavailable: "25%"
+
+# Service Monitor for Prometheus
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    app: multi-service-platform
+
+# Network Policies
+networkPolicy:
+  enabled: true
+  ingress:
+    enabled: true
+  egress:
+    enabled: true
+
+# Persistence configuration for services that need it
+persistence:
+  fileService:
+    enabled: true
+    size: 50Gi
+    mountPath: /uploads
+  searchService:
+    enabled: true
+    size: 20Gi
+    mountPath: /data
+
+# Node affinity and tolerations
+nodeSelector: {}
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - multi-service-platform
+        topologyKey: kubernetes.io/hostname
+
+tolerations: []
+
+# Resource quotas for the namespace
+resourceQuota:
+  enabled: false
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    limits.cpu: "20"
+    limits.memory: 40Gi
+    persistentvolumeclaims: "10"
+    services: "20"
+    secrets: "10"
+    configmaps: "10"
+
+# Limit ranges for pods
+limitRange:
+  enabled: false
+  limits:
+  - default:
+      cpu: "500m"
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    type: Container

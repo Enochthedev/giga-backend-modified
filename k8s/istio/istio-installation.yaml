@@ -10,9 +10,21 @@ spec:
       multiCluster:
         clusterName: cluster1
       network: network1
+      proxy:
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
     pilot:
       env:
         EXTERNAL_ISTIOD: false
+        PILOT_TRACE_SAMPLING: "100"
+        PILOT_ENABLE_WORKLOAD_ENTRY_AUTOREGISTRATION: true
+        PILOT_ENABLE_CROSS_CLUSTER_WORKLOAD_ENTRY: true
+        PILOT_SKIP_VALIDATE_TRUST_DOMAIN: true
   components:
     pilot:
       k8s:
@@ -20,9 +32,12 @@ spec:
           requests:
             cpu: 500m
             memory: 2048Mi
+          limits:
+            cpu: 1000m
+            memory: 4096Mi
         hpaSpec:
           maxReplicas: 5
-          minReplicas: 1
+          minReplicas: 2
           scaleTargetRef:
             apiVersion: apps/v1
             kind: Deployment
@@ -47,7 +62,7 @@ spec:
             memory: 1024Mi
         hpaSpec:
           maxReplicas: 5
-          minReplicas: 1
+          minReplicas: 2
           scaleTargetRef:
             apiVersion: apps/v1
             kind: Deployment
@@ -61,6 +76,19 @@ spec:
                 averageUtilization: 80
         service:
           type: LoadBalancer
+          ports:
+          - port: 15021
+            targetPort: 15021
+            name: status-port
+            protocol: TCP
+          - port: 80
+            targetPort: 8080
+            name: http2
+            protocol: TCP
+          - port: 443
+            targetPort: 8443
+            name: https
+            protocol: TCP
     egressGateways:
     - name: istio-egressgateway
       enabled: true
@@ -72,3 +100,46 @@ spec:
           limits:
             cpu: 2000m
             memory: 1024Mi
+        hpaSpec:
+          maxReplicas: 3
+          minReplicas: 1
+          scaleTargetRef:
+            apiVersion: apps/v1
+            kind: Deployment
+            name: istio-egressgateway
+          metrics:
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: 80
+  meshConfig:
+    accessLogFile: /dev/stdout
+    defaultConfig:
+      proxyStatsMatcher:
+        inclusionRegexps:
+        - ".*outlier_detection.*"
+        - ".*circuit_breakers.*"
+        - ".*upstream_rq_retry.*"
+        - ".*upstream_rq_pending.*"
+        - ".*_cx_.*"
+      gatewayTopology:
+        numTrustedProxies: 2
+    extensionProviders:
+    - name: jaeger
+      envoyOtelAls:
+        service: jaeger-collector.istio-system.svc.cluster.local
+        port: 4317
+    - name: prometheus
+      prometheus:
+        configOverride:
+          metric_relabeling_configs:
+          - source_labels: [__name__]
+            regex: 'istio_.*'
+            action: keep
+    defaultProviders:
+      tracing:
+      - jaeger
+      metrics:
+      - prometheus

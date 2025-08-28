@@ -1,37 +1,24 @@
-{{- range $service := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" }}
-{{- $config := index $.Values $service }}
-{{- if and $config.enabled $config.autoscaling.enabled }}
+{{- $services := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" -}}
+{{- range $serviceName := $services -}}
+{{- $serviceConfig := index $.Values $serviceName -}}
+{{- if and $serviceConfig.enabled $serviceConfig.autoscaling.enabled -}}
+{{- $kebabServiceName := $serviceName | replace "Service" "-service" | replace "apiGateway" "api-gateway" | replace "authenticationService" "authentication-service" | replace "ecommerceService" "ecommerce-service" | replace "paymentService" "payment-service" | replace "taxiService" "taxi-service" | replace "hotelService" "hotel-service" | replace "advertisementService" "advertisement-service" | replace "notificationService" "notification-service" | replace "fileService" "file-service" | replace "searchService" "search-service" }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: {{ $service | kebabcase }}-hpa
-  namespace: {{ $.Release.Namespace }}
+  name: {{ $kebabServiceName }}-hpa
+  namespace: {{ $.Values.namespace | default "multi-service-platform" }}
   labels:
-    {{- include "multi-service-platform.labels" $ | nindent 4 }}
-    app.kubernetes.io/component: {{ $service | kebabcase }}
+    {{- include "multi-service-platform.serviceLabels" (dict "serviceName" $kebabServiceName "context" $) | nindent 4 }}
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: {{ $service | kebabcase }}
-  minReplicas: {{ $config.autoscaling.minReplicas }}
-  maxReplicas: {{ $config.autoscaling.maxReplicas }}
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: {{ $config.autoscaling.targetCPUUtilizationPercentage }}
-  {{- if $config.autoscaling.targetMemoryUtilizationPercentage }}
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: {{ $config.autoscaling.targetMemoryUtilizationPercentage }}
-  {{- end }}
+    name: {{ $kebabServiceName }}
+  minReplicas: {{ $serviceConfig.autoscaling.minReplicas | default 1 }}
+  maxReplicas: {{ $serviceConfig.autoscaling.maxReplicas | default 10 }}
+  {{- include "multi-service-platform.hpaMetrics" $serviceConfig.autoscaling | nindent 2 }}
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
@@ -39,6 +26,10 @@ spec:
       - type: Percent
         value: 10
         periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min
     scaleUp:
       stabilizationWindowSeconds: 60
       policies:
@@ -46,7 +37,7 @@ spec:
         value: 50
         periodSeconds: 60
       - type: Pods
-        value: 2
+        value: 4
         periodSeconds: 60
       selectPolicy: Max
 {{- end }}

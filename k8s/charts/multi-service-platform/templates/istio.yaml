@@ -1,0 +1,259 @@
+{{- if .Values.istio.enabled }}
+# Istio Gateway
+{{- if .Values.istio.gateway.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: {{ include "multi-service-platform.fullname" . }}-gateway
+  namespace: {{ .Values.namespace | default "multi-service-platform" }}
+  labels:
+    {{- include "multi-service-platform.labels" . | nindent 4 }}
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    {{- range .Values.istio.gateway.hosts }}
+    - {{ . | quote }}
+    {{- end }}
+    tls:
+      httpsRedirect: true
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: {{ .Values.ingress.tls.secretName | default "platform-tls" }}
+    hosts:
+    {{- range .Values.istio.gateway.hosts }}
+    - {{ . | quote }}
+    {{- end }}
+{{- end }}
+
+# Istio Virtual Service
+{{- if .Values.istio.virtualService.enabled }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: {{ include "multi-service-platform.fullname" . }}-vs
+  namespace: {{ .Values.namespace | default "multi-service-platform" }}
+  labels:
+    {{- include "multi-service-platform.labels" . | nindent 4 }}
+spec:
+  hosts:
+  {{- range .Values.istio.gateway.hosts }}
+  - {{ . | quote }}
+  {{- end }}
+  gateways:
+  - {{ include "multi-service-platform.fullname" . }}-gateway
+  http:
+  # API Gateway - Main routing
+  - match:
+    - uri:
+        prefix: /api/v1/auth
+    route:
+    - destination:
+        host: authentication-service
+        port:
+          number: {{ .Values.authenticationService.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - match:
+    - uri:
+        prefix: /api/v1/ecommerce
+    route:
+    - destination:
+        host: ecommerce-service
+        port:
+          number: {{ .Values.ecommerceService.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - match:
+    - uri:
+        prefix: /api/v1/payment
+    route:
+    - destination:
+        host: payment-service
+        port:
+          number: {{ .Values.paymentService.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - match:
+    - uri:
+        prefix: /api/v1/taxi
+    route:
+    - destination:
+        host: taxi-service
+        port:
+          number: {{ .Values.taxiService.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - match:
+    - uri:
+        prefix: /api/v1/hotel
+    route:
+    - destination:
+        host: hotel-service
+        port:
+          number: {{ .Values.hotelService.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - match:
+    - uri:
+        prefix: /api/v1/ads
+    route:
+    - destination:
+        host: advertisement-service
+        port:
+          number: {{ .Values.advertisementService.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - match:
+    - uri:
+        prefix: /api/v1/notifications
+    route:
+    - destination:
+        host: notification-service
+        port:
+          number: {{ .Values.notificationService.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  - match:
+    - uri:
+        prefix: /api/v1/files
+    route:
+    - destination:
+        host: file-service
+        port:
+          number: {{ .Values.fileService.service.port }}
+    timeout: 60s
+    retries:
+      attempts: 2
+      perTryTimeout: 30s
+  - match:
+    - uri:
+        prefix: /api/v1/search
+    route:
+    - destination:
+        host: search-service
+        port:
+          number: {{ .Values.searchService.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+  # Default route to API Gateway
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: api-gateway-service
+        port:
+          number: {{ .Values.apiGateway.service.port }}
+    timeout: 30s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+{{- end }}
+
+# Istio Destination Rules
+{{- if .Values.istio.destinationRule.enabled }}
+{{- $services := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" -}}
+{{- range $serviceName := $services -}}
+{{- $serviceConfig := index $.Values $serviceName -}}
+{{- if $serviceConfig.enabled -}}
+{{- $kebabServiceName := $serviceName | replace "Service" "-service" | replace "apiGateway" "api-gateway" | replace "authenticationService" "authentication-service" | replace "ecommerceService" "ecommerce-service" | replace "paymentService" "payment-service" | replace "taxiService" "taxi-service" | replace "hotelService" "hotel-service" | replace "advertisementService" "advertisement-service" | replace "notificationService" "notification-service" | replace "fileService" "file-service" | replace "searchService" "search-service" }}
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ $kebabServiceName }}-dr
+  namespace: {{ $.Values.namespace | default "multi-service-platform" }}
+  labels:
+    {{- include "multi-service-platform.serviceLabels" (dict "serviceName" $kebabServiceName "context" $) | nindent 4 }}
+spec:
+  host: {{ $kebabServiceName }}-service
+  trafficPolicy:
+    loadBalancer:
+      simple: LEAST_CONN
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        http1MaxPendingRequests: 50
+        http2MaxRequests: 100
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+        consecutiveGatewayErrors: 5
+        interval: 30s
+        baseEjectionTime: 30s
+        maxEjectionPercent: 50
+    outlierDetection:
+      consecutiveGatewayErrors: 5
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+{{- end }}
+{{- end }}
+{{- end }}
+
+# Istio PeerAuthentication for mTLS
+---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: {{ include "multi-service-platform.fullname" . }}-peer-auth
+  namespace: {{ .Values.namespace | default "multi-service-platform" }}
+  labels:
+    {{- include "multi-service-platform.labels" . | nindent 4 }}
+spec:
+  mtls:
+    mode: STRICT
+
+# Istio AuthorizationPolicy
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ include "multi-service-platform.fullname" . }}-authz
+  namespace: {{ .Values.namespace | default "multi-service-platform" }}
+  labels:
+    {{- include "multi-service-platform.labels" . | nindent 4 }}
+spec:
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/{{ .Values.namespace | default "multi-service-platform" }}/sa/{{ include "multi-service-platform.serviceAccountName" . }}"]
+    - source:
+        namespaces: ["istio-system"]
+  - to:
+    - operation:
+        methods: ["GET"]
+        paths: ["/health", "/ready", "/metrics"]
+{{- end }}

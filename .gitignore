@@ -198,3 +198,21 @@ coverage/
 
 # Agent file 
 .kiro
+
+# Legacy backup directories
+legacy-services-backup-*/
+common/
+
+# Old Docker Compose files (removed in cleanup)
+docker-compose.dev.yml
+docker-compose.essential.yml
+docker-compose.legacy.yml
+docker-compose.*.bak
+
+# Old startup scripts (replaced)
+start-essential-platform.sh
+start-consolidated-platform.sh
+
+# Old documentation (consolidated)
+DEVELOPER_QUICK_REFERENCE.md
+DOCKER_SETUP_GUIDE.md

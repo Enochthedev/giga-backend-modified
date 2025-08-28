@@ -62,7 +62,7 @@ A comprehensive communication and support system service that provides real-time
 1. **Clone and install dependencies**
 ```bash
 cd services/messaging-service
-npm install
+pnpm install
 ```
 
 2. **Environment Configuration**
@@ -77,12 +77,12 @@ cp .env.example .env
 createdb messaging_db
 
 # Run migrations
-npm run migrate
+pnpm run migrate
 ```
 
 4. **Start Development Server**
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 ## Environment Variables
@@ -209,16 +209,16 @@ RATE_LIMIT_MAX_REQUESTS=100
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run tests with coverage
-npm run test:coverage
+pnpm run test:coverage
 
 # Run tests in watch mode
-npm run test:watch
+pnpm run test:watch
 
 # Run specific test file
-npm test -- messaging-service.test.ts
+pnpm test -- messaging-service.test.ts
 ```
 
 ## Docker Deployment

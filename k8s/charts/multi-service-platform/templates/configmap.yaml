@@ -2,18 +2,89 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: platform-config
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.namespace }}
   labels:
     {{- include "multi-service-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config
 data:
+  # Environment
   NODE_ENV: {{ .Values.app.environment | quote }}
-  LOG_LEVEL: {{ if eq .Values.app.environment "production" }}"info"{{ else }}"debug"{{ end }}
-  REDIS_HOST: {{ if .Values.redis.enabled }}"{{ .Release.Name }}-redis-master"{{ else }}"redis-service"{{ end }}
-  REDIS_PORT: "6379"
-  RABBITMQ_HOST: {{ if .Values.rabbitmq.enabled }}"{{ .Release.Name }}-rabbitmq"{{ else }}"rabbitmq-service"{{ end }}
-  RABBITMQ_PORT: "5672"
-  POSTGRES_HOST: {{ if .Values.postgresql.enabled }}"{{ .Release.Name }}-postgresql"{{ else }}"postgres-service"{{ end }}
-  POSTGRES_PORT: "5432"
-  ELASTICSEARCH_HOST: {{ if .Values.elasticsearch.enabled }}"{{ .Release.Name }}-elasticsearch"{{ else }}"elasticsearch-service"{{ end }}
-  ELASTICSEARCH_PORT: "9200"
+  LOG_LEVEL: {{ .Values.logging.level | quote }}
+  LOG_FORMAT: {{ .Values.logging.format | quote }}
+  
+  # Service Discovery
   API_GATEWAY_URL: "http://api-gateway-service:{{ .Values.apiGateway.service.port }}"
+  AUTH_SERVICE_URL: "http://authentication-service:{{ .Values.authenticationService.service.port }}"
+  ECOMMERCE_SERVICE_URL: "http://ecommerce-service:{{ .Values.ecommerceService.service.port }}"
+  PAYMENT_SERVICE_URL: "http://payment-service:{{ .Values.paymentService.service.port }}"
+  TAXI_SERVICE_URL: "http://taxi-service:{{ .Values.taxiService.service.port }}"
+  HOTEL_SERVICE_URL: "http://hotel-service:{{ .Values.hotelService.service.port }}"
+  ADVERTISEMENT_SERVICE_URL: "http://advertisement-service:{{ .Values.advertisementService.service.port }}"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:{{ .Values.notificationService.service.port }}"
+  FILE_SERVICE_URL: "http://file-service:{{ .Values.fileService.service.port }}"
+  SEARCH_SERVICE_URL: "http://search-service:{{ .Values.searchService.service.port }}"
+  {{- if .Values.adminService.enabled }}
+  ADMIN_SERVICE_URL: "http://admin-service:{{ .Values.adminService.service.port }}"
+  {{- end }}
+  {{- if .Values.analyticsService.enabled }}
+  ANALYTICS_SERVICE_URL: "http://analytics-service:{{ .Values.analyticsService.service.port }}"
+  {{- end }}
+  {{- if .Values.messagingService.enabled }}
+  MESSAGING_SERVICE_URL: "http://messaging-service:{{ .Values.messagingService.service.port }}"
+  {{- end }}
+  
+  # Database URLs
+  {{- if .Values.postgresql.enabled }}
+  POSTGRES_HOST: "{{ include "multi-service-platform.fullname" . }}-postgresql"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: {{ .Values.postgresql.auth.database | quote }}
+  POSTGRES_USER: {{ .Values.postgresql.auth.username | quote }}
+  {{- end }}
+  
+  # Redis Configuration
+  {{- if .Values.redis.enabled }}
+  REDIS_HOST: "{{ include "multi-service-platform.fullname" . }}-redis-master"
+  REDIS_PORT: "6379"
+  {{- end }}
+  
+  # RabbitMQ Configuration
+  {{- if .Values.rabbitmq.enabled }}
+  RABBITMQ_HOST: "{{ include "multi-service-platform.fullname" . }}-rabbitmq"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USER: {{ .Values.rabbitmq.auth.username | quote }}
+  {{- end }}
+  
+  # Elasticsearch Configuration
+  {{- if .Values.elasticsearch.enabled }}
+  ELASTICSEARCH_HOST: "{{ include "multi-service-platform.fullname" . }}-elasticsearch"
+  ELASTICSEARCH_PORT: "9200"
+  {{- end }}
+  
+  # CORS Configuration
+  CORS_ORIGIN: {{ .Values.security.corsOrigin | quote }}
+  
+  # Rate Limiting
+  RATE_LIMIT_WINDOW: {{ .Values.security.rateLimit.window | quote }}
+  RATE_LIMIT_MAX: {{ .Values.security.rateLimit.max | quote }}
+  
+  # Feature Flags
+  {{- range $key, $value := .Values.featureFlags }}
+  FEATURE_{{ $key | upper }}: {{ $value | quote }}
+  {{- end }}
+  
+  # Monitoring
+  METRICS_ENABLED: {{ .Values.monitoring.enabled | quote }}
+  TRACING_ENABLED: "true"
+  {{- if .Values.istio.enabled }}
+  JAEGER_ENDPOINT: "http://jaeger-collector.istio-system:14268/api/traces"
+  {{- end }}
+  
+  # External Services
+  {{- if .Values.externalServices.aws.enabled }}
+  AWS_REGION: {{ .Values.externalServices.aws.region | quote }}
+  FILE_STORAGE_TYPE: "s3"
+  {{- end }}
+  
+  # Notification Settings
+  EMAIL_FROM: "noreply@yourplatform.com"
+  SMS_FROM: "+1234567890"

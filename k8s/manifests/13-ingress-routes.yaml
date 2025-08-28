@@ -1,0 +1,226 @@
+# Main Platform Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: platform-ingress
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self'; object-src 'none'; child-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self';";
+spec:
+  tls:
+  - hosts:
+    - api.yourplatform.com
+    secretName: platform-tls
+  rules:
+  - host: api.yourplatform.com
+    http:
+      paths:
+      # API Gateway - Main entry point
+      - path: /api/v1(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-service
+            port:
+              number: 3000
+      # Direct service access (for development/debugging)
+      - path: /auth(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: authentication-service
+            port:
+              number: 3001
+      - path: /ecommerce(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: ecommerce-service
+            port:
+              number: 3002
+      - path: /payment(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: payment-service
+            port:
+              number: 3003
+      - path: /taxi(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: taxi-service
+            port:
+              number: 3004
+      - path: /hotel(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: hotel-service
+            port:
+              number: 3005
+      - path: /ads(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: advertisement-service
+            port:
+              number: 3006
+      - path: /notifications(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              number: 3007
+      - path: /files(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: file-service
+            port:
+              number: 3008
+      - path: /search(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: search-service
+            port:
+              number: 3009
+---
+# Admin Dashboard Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin-ingress
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: admin-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: admin-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Admin Area'
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; media-src 'self'; object-src 'none'; child-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self';";
+spec:
+  tls:
+  - hosts:
+    - admin.yourplatform.com
+    secretName: admin-platform-tls
+  rules:
+  - host: admin.yourplatform.com
+    http:
+      paths:
+      - path: /admin(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 3010
+      - path: /analytics(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: analytics-service
+            port:
+              number: 3011
+---
+# Admin Basic Auth Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admin-auth
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: admin-auth
+type: Opaque
+data:
+  # admin:$2y$10$... (bcrypt hash of "changeme-in-production")
+  # Generate with: htpasswd -nb admin your-password | base64
+  auth: YWRtaW46JDJ5JDEwJE5wWjBGVzJOUVBGVzJOUVBGVzJOUU9GVzJOUVBGVzJOUVBGVzJOUVBGVzJOUVBGVzJOUQ==
+---
+# WebSocket Ingress for Real-time Features
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: websocket-ingress
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: websocket-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: "taxi-service,messaging-service"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_cache_bypass $http_upgrade;
+spec:
+  tls:
+  - hosts:
+    - ws.yourplatform.com
+    secretName: websocket-tls
+  rules:
+  - host: ws.yourplatform.com
+    http:
+      paths:
+      - path: /taxi(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: taxi-service
+            port:
+              number: 3004
+      - path: /messaging(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: messaging-service
+            port:
+              number: 3012

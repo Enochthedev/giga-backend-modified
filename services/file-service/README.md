@@ -25,7 +25,7 @@ A comprehensive file upload and media management service with cloud storage inte
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Copy environment configuration
 cp .env.example .env

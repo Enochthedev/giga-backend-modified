@@ -1,22 +1,22 @@
 # Multi-stage build for production optimization
 FROM node:18-alpine AS builder
 
-# Install build dependencies for native modules
-RUN apk add --no-cache python3 make g++ vips-dev
+# Install pnpm and build dependencies for native modules
+RUN npm install -g pnpm && apk add --no-cache python3 make g++ vips-dev
 
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package*.json pnpm-lock.yaml ./
 
 # Install dependencies
-RUN npm ci --only=production
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN pnpm run build
 
 # Production stage
 FROM node:18-alpine AS production

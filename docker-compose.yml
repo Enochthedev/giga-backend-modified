@@ -1,0 +1,711 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  postgres:
+    image: postgres:15-alpine
+    container_name: multi-service-postgres
+    environment:
+      POSTGRES_DB: multi_service_platform
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d multi_service_platform"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: multi-service-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: multi-service-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-password}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: multi-service-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+      - "${ELASTICSEARCH_TRANSPORT_PORT:-9300}:9300"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+    profiles:
+      - full
+      - search
+
+  # Core Services
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    container_name: multi-service-api-gateway
+    ports:
+      - "${API_GATEWAY_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3000
+      - REDIS_URL=redis://redis:6379
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+      - ECOMMERCE_SERVICE_URL=http://ecommerce-service:3002
+      - PAYMENT_SERVICE_URL=http://payment-service:3003
+      - TAXI_SERVICE_URL=http://taxi-service:3004
+      - HOTEL_SERVICE_URL=http://hotel-service:3005
+      - ADVERTISEMENT_SERVICE_URL=http://advertisement-service:3006
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3007
+      - FILE_SERVICE_URL=http://file-service:3008
+      - SEARCH_SERVICE_URL=http://search-service:3009
+      - ADMIN_SERVICE_URL=http://admin-service:3010
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3011
+      - MESSAGING_SERVICE_URL=http://messaging-service:3012
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+      - authentication-service
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  authentication-service:
+    build:
+      context: .
+      dockerfile: services/authentication-service/Dockerfile
+    container_name: multi-service-authentication
+    ports:
+      - "${AUTH_SERVICE_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=auth_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-7d}
+    volumes:
+      - ./services/authentication-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  ecommerce-service:
+    build:
+      context: .
+      dockerfile: services/ecommerce-service/Dockerfile
+    container_name: multi-service-ecommerce
+    ports:
+      - "${ECOMMERCE_SERVICE_PORT:-3002}:3002"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3002
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=ecommerce_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+      - PAYMENT_SERVICE_URL=http://payment-service:3003
+      - SEARCH_SERVICE_URL=http://search-service:3009
+    volumes:
+      - ./services/ecommerce-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3002/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+    container_name: multi-service-payment
+    ports:
+      - "${PAYMENT_SERVICE_PORT:-3003}:3003"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3003
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=payment_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY:-}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+    volumes:
+      - ./services/payment-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3003/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  taxi-service:
+    build:
+      context: .
+      dockerfile: services/taxi-service/Dockerfile
+    container_name: multi-service-taxi
+    ports:
+      - "${TAXI_SERVICE_PORT:-3004}:3004"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3004
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=taxi_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+      - PAYMENT_SERVICE_URL=http://payment-service:3003
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3007
+    volumes:
+      - ./services/taxi-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3004/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  hotel-service:
+    build:
+      context: .
+      dockerfile: services/hotel-service/Dockerfile
+    container_name: multi-service-hotel
+    ports:
+      - "${HOTEL_SERVICE_PORT:-3005}:3005"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3005
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=hotel_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+      - PAYMENT_SERVICE_URL=http://payment-service:3003
+      - SEARCH_SERVICE_URL=http://search-service:3009
+    volumes:
+      - ./services/hotel-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3005/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  advertisement-service:
+    build:
+      context: .
+      dockerfile: services/advertisement-service/Dockerfile
+    container_name: multi-service-advertisement
+    ports:
+      - "${ADVERTISEMENT_SERVICE_PORT:-3006}:3006"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3006
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=advertisement_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+    volumes:
+      - ./services/advertisement-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3006/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: multi-service-notification
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-3007}:3007"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3007
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=notification_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+    volumes:
+      - ./services/notification-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3007/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  file-service:
+    build:
+      context: .
+      dockerfile: services/file-service/Dockerfile
+    container_name: multi-service-file
+    ports:
+      - "${FILE_SERVICE_PORT:-3008}:3008"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3008
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=file_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-}
+    volumes:
+      - ./services/file-service:/app
+      - /app/node_modules
+      - file_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3008/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  search-service:
+    build:
+      context: .
+      dockerfile: services/search-service/Dockerfile
+    container_name: multi-service-search
+    ports:
+      - "${SEARCH_SERVICE_PORT:-3009}:3009"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3009
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+    volumes:
+      - ./services/search-service:/app
+      - /app/node_modules
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3009/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - full
+      - search
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: services/admin-service/Dockerfile
+    container_name: multi-service-admin
+    ports:
+      - "${ADMIN_SERVICE_PORT:-3010}:3010"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3010
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=admin_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+      - ECOMMERCE_SERVICE_URL=http://ecommerce-service:3002
+      - PAYMENT_SERVICE_URL=http://payment-service:3003
+      - TAXI_SERVICE_URL=http://taxi-service:3004
+      - HOTEL_SERVICE_URL=http://hotel-service:3005
+      - ANALYTICS_SERVICE_URL=http://analytics-service:3011
+    volumes:
+      - ./services/admin-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3010/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - full
+      - admin
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+    container_name: multi-service-analytics
+    ports:
+      - "${ANALYTICS_SERVICE_PORT:-3011}:3011"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3011
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=analytics_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    volumes:
+      - ./services/analytics-service:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3011/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - full
+      - analytics
+
+  messaging-service:
+    build:
+      context: .
+      dockerfile: services/messaging-service/Dockerfile
+    container_name: multi-service-messaging
+    ports:
+      - "${MESSAGING_SERVICE_PORT:-3012}:3012"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3012
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-admin}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+      - AUTH_SERVICE_URL=http://authentication-service:3001
+    volumes:
+      - ./services/messaging-service:/app
+      - /app/node_modules
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      authentication-service:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3012/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - full
+      - messaging
+
+  # Data Governance Admin Service (Optional)
+  data-governance-admin:
+    build:
+      context: .
+      dockerfile: services/data-governance-admin/Dockerfile
+    container_name: multi-service-data-governance-admin
+    ports:
+      - "${DATA_GOVERNANCE_ADMIN_PORT:-3020}:3020"
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3020
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/multi_service_platform
+      - GDPR_ENABLED=${GDPR_ENABLED:-true}
+      - PCI_COMPLIANCE_ENABLED=${PCI_COMPLIANCE_ENABLED:-true}
+      - PCI_ENCRYPTION_KEY=${PCI_ENCRYPTION_KEY:-your-32-character-encryption-key-change-in-production}
+      - AUDIT_ENABLED=${AUDIT_ENABLED:-true}
+      - AUDIT_RETENTION_DAYS=${AUDIT_RETENTION_DAYS:-2555}
+      - BACKUP_ENABLED=${BACKUP_ENABLED:-true}
+      - BACKUP_ENCRYPTION_ENABLED=${BACKUP_ENCRYPTION_ENABLED:-true}
+      - BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY:-your-backup-encryption-key-change-in-production}
+      - ANONYMIZATION_ENABLED=${ANONYMIZATION_ENABLED:-true}
+      - ANONYMIZATION_SALT=${ANONYMIZATION_SALT:-your-anonymization-salt-change-in-production}
+      - ANONYMIZATION_BATCH_SIZE=${ANONYMIZATION_BATCH_SIZE:-1000}
+    volumes:
+      - ./services/data-governance-admin:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - multi-service-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3020/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    profiles:
+      - admin
+      - full
+
+  # Monitoring Services (Optional)
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: multi-service-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - multi-service-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+      - full
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: multi-service-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "${GRAFANA_PORT:-3100}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - multi-service-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+      - full
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  file_uploads:
+    driver: local
+
+networks:
+  multi-service-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

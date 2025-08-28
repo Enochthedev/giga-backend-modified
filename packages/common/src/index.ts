@@ -25,4 +25,7 @@ export * from './messaging';
 // Constants
 export * from './constants';
 
+// Data Governance
+export * from './data-governance';
+
 // NOTE: Monitoring and Localization exports are intentionally omitted from build to reduce dependencies

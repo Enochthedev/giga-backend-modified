@@ -1,0 +1,258 @@
+# Main Platform Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: platform-vs
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: virtual-service
+spec:
+  hosts:
+  - api.yourplatform.com
+  gateways:
+  - platform-gateway
+  http:
+  # API Gateway - Main entry point with load balancing
+  - match:
+    - uri:
+        prefix: /api/v1/
+    route:
+    - destination:
+        host: api-gateway-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3000
+      weight: 100
+    fault:
+      delay:
+        percentage:
+          value: 0.1
+        fixedDelay: 5s
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+    timeout: 30s
+    headers:
+      request:
+        set:
+          x-forwarded-proto: https
+        add:
+          x-request-start: "%START_TIME(%s.%3f)%"
+      response:
+        add:
+          x-served-by: istio-gateway
+  # Direct service access with canary deployment support
+  - match:
+    - uri:
+        prefix: /auth/
+    route:
+    - destination:
+        host: authentication-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3001
+        subset: v1
+      weight: 90
+    - destination:
+        host: authentication-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3001
+        subset: canary
+      weight: 10
+    retries:
+      attempts: 2
+      perTryTimeout: 5s
+    timeout: 15s
+  - match:
+    - uri:
+        prefix: /ecommerce/
+    route:
+    - destination:
+        host: ecommerce-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3002
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+    timeout: 30s
+  - match:
+    - uri:
+        prefix: /payment/
+    route:
+    - destination:
+        host: payment-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3003
+      weight: 100
+    retries:
+      attempts: 5
+      perTryTimeout: 15s
+      retryOn: 5xx,reset,connect-failure,refused-stream
+    timeout: 60s
+    headers:
+      request:
+        add:
+          x-payment-gateway: istio
+  - match:
+    - uri:
+        prefix: /taxi/
+    route:
+    - destination:
+        host: taxi-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3004
+      weight: 100
+    retries:
+      attempts: 2
+      perTryTimeout: 10s
+    timeout: 30s
+  - match:
+    - uri:
+        prefix: /hotel/
+    route:
+    - destination:
+        host: hotel-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3005
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+    timeout: 30s
+  - match:
+    - uri:
+        prefix: /ads/
+    route:
+    - destination:
+        host: advertisement-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3006
+      weight: 100
+    timeout: 15s
+  - match:
+    - uri:
+        prefix: /notifications/
+    route:
+    - destination:
+        host: notification-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3007
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 10s
+    timeout: 30s
+  - match:
+    - uri:
+        prefix: /files/
+    route:
+    - destination:
+        host: file-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3008
+      weight: 100
+    retries:
+      attempts: 2
+      perTryTimeout: 30s
+    timeout: 120s  # Longer timeout for file operations
+  - match:
+    - uri:
+        prefix: /search/
+    route:
+    - destination:
+        host: search-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3009
+      weight: 100
+    retries:
+      attempts: 2
+      perTryTimeout: 5s
+    timeout: 15s
+---
+# Admin Virtual Service with enhanced security
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: admin-vs
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: admin-virtual-service
+spec:
+  hosts:
+  - admin.yourplatform.com
+  gateways:
+  - admin-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /admin/
+    route:
+    - destination:
+        host: admin-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3010
+      weight: 100
+    retries:
+      attempts: 2
+      perTryTimeout: 10s
+    timeout: 30s
+    headers:
+      request:
+        add:
+          x-admin-access: "true"
+  - match:
+    - uri:
+        prefix: /analytics/
+    route:
+    - destination:
+        host: analytics-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3011
+      weight: 100
+    retries:
+      attempts: 2
+      perTryTimeout: 15s
+    timeout: 60s
+---
+# WebSocket Virtual Service for real-time features
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: websocket-vs
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: websocket-virtual-service
+spec:
+  hosts:
+  - ws.yourplatform.com
+  gateways:
+  - websocket-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /taxi/
+    route:
+    - destination:
+        host: taxi-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3004
+      weight: 100
+    timeout: 0s  # No timeout for WebSocket connections
+    headers:
+      request:
+        add:
+          connection: upgrade
+          upgrade: websocket
+  - match:
+    - uri:
+        prefix: /messaging/
+    route:
+    - destination:
+        host: messaging-service.multi-service-platform.svc.cluster.local
+        port:
+          number: 3012
+      weight: 100
+    timeout: 0s  # No timeout for WebSocket connections

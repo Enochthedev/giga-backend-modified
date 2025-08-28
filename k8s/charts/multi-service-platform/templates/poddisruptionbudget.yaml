@@ -1,0 +1,26 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- $services := list "apiGateway" "authenticationService" "ecommerceService" "paymentService" "taxiService" "hotelService" "advertisementService" "notificationService" "fileService" "searchService" -}}
+{{- range $serviceName := $services -}}
+{{- $serviceConfig := index $.Values $serviceName -}}
+{{- if and $serviceConfig.enabled (gt ($serviceConfig.replicaCount | int) 1) -}}
+{{- $kebabServiceName := $serviceName | replace "Service" "-service" | replace "apiGateway" "api-gateway" | replace "authenticationService" "authentication-service" | replace "ecommerceService" "ecommerce-service" | replace "paymentService" "payment-service" | replace "taxiService" "taxi-service" | replace "hotelService" "hotel-service" | replace "advertisementService" "advertisement-service" | replace "notificationService" "notification-service" | replace "fileService" "file-service" | replace "searchService" "search-service" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $kebabServiceName }}-pdb
+  namespace: {{ $.Values.namespace | default "multi-service-platform" }}
+  labels:
+    {{- include "multi-service-platform.serviceLabels" (dict "serviceName" $kebabServiceName "context" $) | nindent 4 }}
+spec:
+  {{- if $.Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ $.Values.podDisruptionBudget.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ $.Values.podDisruptionBudget.maxUnavailable | default "25%" }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "multi-service-platform.serviceSelectorLabels" (dict "serviceName" $kebabServiceName) | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: platform-config
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: config
+data:
+  # Environment
+  NODE_ENV: "production"
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  
+  # Service Discovery
+  API_GATEWAY_URL: "http://api-gateway-service:3000"
+  AUTH_SERVICE_URL: "http://authentication-service:3001"
+  ECOMMERCE_SERVICE_URL: "http://ecommerce-service:3002"
+  PAYMENT_SERVICE_URL: "http://payment-service:3003"
+  TAXI_SERVICE_URL: "http://taxi-service:3004"
+  HOTEL_SERVICE_URL: "http://hotel-service:3005"
+  ADVERTISEMENT_SERVICE_URL: "http://advertisement-service:3006"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:3007"
+  FILE_SERVICE_URL: "http://file-service:3008"
+  SEARCH_SERVICE_URL: "http://search-service:3009"
+  ADMIN_SERVICE_URL: "http://admin-service:3010"
+  ANALYTICS_SERVICE_URL: "http://analytics-service:3011"
+  MESSAGING_SERVICE_URL: "http://messaging-service:3012"
+  
+  # Database URLs
+  POSTGRES_HOST: "postgresql"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "platform_db"
+  POSTGRES_USER: "platform_user"
+  
+  # Redis Configuration
+  REDIS_HOST: "redis-master"
+  REDIS_PORT: "6379"
+  
+  # RabbitMQ Configuration
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_USER: "platform_user"
+  
+  # Elasticsearch Configuration
+  ELASTICSEARCH_HOST: "elasticsearch"
+  ELASTICSEARCH_PORT: "9200"
+  
+  # CORS Configuration
+  CORS_ORIGIN: "*"
+  
+  # Rate Limiting
+  RATE_LIMIT_WINDOW: "15"
+  RATE_LIMIT_MAX: "100"
+  
+  # Feature Flags
+  FEATURE_NEW_UI: "true"
+  FEATURE_ADVANCED_ANALYTICS: "false"
+  FEATURE_BETA_FEATURES: "false"
+  
+  # Monitoring
+  METRICS_ENABLED: "true"
+  TRACING_ENABLED: "true"
+  JAEGER_ENDPOINT: "http://jaeger-collector.istio-system:14268/api/traces"
+  
+  # File Storage
+  FILE_STORAGE_TYPE: "s3"
+  AWS_REGION: "us-east-1"
+  
+  # Notification Settings
+  EMAIL_FROM: "noreply@yourplatform.com"
+  SMS_FROM: "+1234567890"

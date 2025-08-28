@@ -1,0 +1,162 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-governance-admin
+  namespace: multi-service-platform
+  labels:
+    app: data-governance-admin
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-governance-admin
+  template:
+    metadata:
+      labels:
+        app: data-governance-admin
+        version: v1
+    spec:
+      containers:
+      - name: data-governance-admin
+        image: multi-service-platform/data-governance-admin:latest
+        ports:
+        - containerPort: 3020
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3020"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: database-secret
+              key: url
+        - name: GDPR_ENABLED
+          value: "true"
+        - name: PCI_COMPLIANCE_ENABLED
+          value: "true"
+        - name: PCI_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: data-governance-secret
+              key: pci-encryption-key
+        - name: AUDIT_ENABLED
+          value: "true"
+        - name: AUDIT_RETENTION_DAYS
+          value: "2555"
+        - name: BACKUP_ENABLED
+          value: "true"
+        - name: BACKUP_ENCRYPTION_ENABLED
+          value: "true"
+        - name: BACKUP_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: data-governance-secret
+              key: backup-encryption-key
+        - name: ANONYMIZATION_ENABLED
+          value: "true"
+        - name: ANONYMIZATION_SALT
+          valueFrom:
+            secretKeyRef:
+              name: data-governance-secret
+              key: anonymization-salt
+        - name: ANONYMIZATION_BATCH_SIZE
+          value: "1000"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3020
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3020
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-governance-admin-service
+  namespace: multi-service-platform
+  labels:
+    app: data-governance-admin
+spec:
+  selector:
+    app: data-governance-admin
+  ports:
+  - name: http
+    port: 3020
+    targetPort: 3020
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: data-governance-secret
+  namespace: multi-service-platform
+type: Opaque
+data:
+  # Base64 encoded values - replace with actual values
+  pci-encryption-key: eW91ci0zMi1jaGFyYWN0ZXItZW5jcnlwdGlvbi1rZXktY2hhbmdlLWluLXByb2R1Y3Rpb24=
+  backup-encryption-key: eW91ci1iYWNrdXAtZW5jcnlwdGlvbi1rZXktY2hhbmdlLWluLXByb2R1Y3Rpb24=
+  anonymization-salt: eW91ci1hbm9ueW1pemF0aW9uLXNhbHQtY2hhbmdlLWluLXByb2R1Y3Rpb24=
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: data-governance-admin-network-policy
+  namespace: multi-service-platform
+spec:
+  podSelector:
+    matchLabels:
+      app: data-governance-admin
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api-gateway
+    - podSelector:
+        matchLabels:
+          app: admin-service
+    ports:
+    - protocol: TCP
+      port: 3020
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

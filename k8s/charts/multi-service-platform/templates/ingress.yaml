@@ -3,17 +3,36 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ include "multi-service-platform.fullname" . }}-ingress
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ .Values.namespace }}
   labels:
     {{- include "multi-service-platform.labels" . | nindent 4 }}
-  {{- with .Values.ingress.annotations }}
+    app.kubernetes.io/component: ingress
   annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self'; object-src 'none'; child-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self';";
+    {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
 spec:
-  {{- if .Values.ingress.className }}
-  ingressClassName: {{ .Values.ingress.className }}
-  {{- end }}
   {{- if .Values.ingress.tls }}
   tls:
     {{- range .Values.ingress.tls }}
@@ -29,14 +48,162 @@ spec:
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- range .paths }}
-          - path: {{ .path }}
-            pathType: {{ .pathType }}
-            backend:
-              service:
-                name: {{ .service }}
-                port:
-                  number: {{ .port }}
-          {{- end }}
+        {{- if $.Values.apiGateway.enabled }}
+        - path: /api/v1(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: api-gateway-service
+              port:
+                number: {{ $.Values.apiGateway.service.port }}
+        {{- end }}
+        {{- if $.Values.ingress.directServiceAccess }}
+        {{- if $.Values.authenticationService.enabled }}
+        - path: /auth(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: authentication-service
+              port:
+                number: {{ $.Values.authenticationService.service.port }}
+        {{- end }}
+        {{- if $.Values.ecommerceService.enabled }}
+        - path: /ecommerce(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: ecommerce-service
+              port:
+                number: {{ $.Values.ecommerceService.service.port }}
+        {{- end }}
+        {{- if $.Values.paymentService.enabled }}
+        - path: /payment(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: payment-service
+              port:
+                number: {{ $.Values.paymentService.service.port }}
+        {{- end }}
+        {{- if $.Values.taxiService.enabled }}
+        - path: /taxi(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: taxi-service
+              port:
+                number: {{ $.Values.taxiService.service.port }}
+        {{- end }}
+        {{- if $.Values.hotelService.enabled }}
+        - path: /hotel(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: hotel-service
+              port:
+                number: {{ $.Values.hotelService.service.port }}
+        {{- end }}
+        {{- if $.Values.advertisementService.enabled }}
+        - path: /ads(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: advertisement-service
+              port:
+                number: {{ $.Values.advertisementService.service.port }}
+        {{- end }}
+        {{- if $.Values.notificationService.enabled }}
+        - path: /notifications(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: notification-service
+              port:
+                number: {{ $.Values.notificationService.service.port }}
+        {{- end }}
+        {{- if $.Values.fileService.enabled }}
+        - path: /files(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: file-service
+              port:
+                number: {{ $.Values.fileService.service.port }}
+        {{- end }}
+        {{- if $.Values.searchService.enabled }}
+        - path: /search(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: search-service
+              port:
+                number: {{ $.Values.searchService.service.port }}
+        {{- end }}
+        {{- end }}
     {{- end }}
+{{- if .Values.ingress.admin.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "multi-service-platform.fullname" . }}-admin-ingress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "multi-service-platform.labels" . | nindent 4 }}
+    app.kubernetes.io/component: admin-ingress
+  annotations:
+    kubernetes.io/ingress.class: {{ .Values.ingress.className }}
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: admin-auth
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required - Admin Area'
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ .Values.ingress.admin.allowedIPs | quote }}
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; media-src 'self'; object-src 'none'; child-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self';";
+    {{- with .Values.ingress.admin.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if .Values.ingress.admin.tls }}
+  tls:
+    {{- range .Values.ingress.admin.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.admin.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+        {{- if $.Values.adminService.enabled }}
+        - path: /admin(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: admin-service
+              port:
+                number: {{ $.Values.adminService.service.port }}
+        {{- end }}
+        {{- if $.Values.analyticsService.enabled }}
+        - path: /analytics(/|$)(.*)
+          pathType: Prefix
+          backend:
+            service:
+              name: analytics-service
+              port:
+                number: {{ $.Values.analyticsService.service.port }}
+        {{- end }}
+    {{- end }}
+{{- end }}
 {{- end }}

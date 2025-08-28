@@ -84,8 +84,8 @@ check_build() {
     
     if has_package_json "$service_path"; then
         # Check if build script exists
-        if npm run | grep -q "build"; then
-            run_check "$service_path" "Build" "npm run build"
+        if pnpm run | grep -q "build"; then
+            run_check "$service_path" "Build" "pnpm run build"
         else
             print_warning "No build script found in $service_path, skipping build check"
         fi
@@ -98,8 +98,8 @@ check_tests() {
     
     if has_package_json "$service_path"; then
         # Check if test script exists
-        if npm run | grep -q "test"; then
-            run_check "$service_path" "Tests" "npm test"
+        if pnpm run | grep -q "test"; then
+            run_check "$service_path" "Tests" "pnpm test"
         else
             print_warning "No test script found in $service_path, skipping test check"
         fi
@@ -127,7 +127,7 @@ check_service() {
     if [ ! -d "$service_path/node_modules" ]; then
         print_status "Installing dependencies for $service_name"
         cd "$service_path" || return 1
-        npm install
+        pnpm install
         cd "$original_dir" || return 1
     fi
     

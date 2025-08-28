@@ -1,0 +1,340 @@
+# Enhanced Security Policies for Istio Service Mesh
+# Peer Authentication - Enable mTLS for all services
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: security
+spec:
+  mtls:
+    mode: STRICT
+---
+# Peer Authentication for Istio System
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+---
+# Authorization Policy - Default deny all
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: multi-service-platform
+  labels:
+    app.kubernetes.io/name: multi-service-platform
+    app.kubernetes.io/component: security
+spec: {}
+---
+# Authorization Policy - Allow ingress gateway to all services
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-ingress-gateway
+  namespace: multi-service-platform
+spec:
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+---
+# Authorization Policy - API Gateway access
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: api-gateway-policy
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+        paths: ["/api/v1/*", "/health", "/ready", "/metrics"]
+---
+# Authorization Policy - Authentication Service
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: authentication-service-policy
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: authentication-service
+  rules:
+  # Allow API Gateway to access auth service
+  - from:
+    - source:
+        principals: ["cluster.local/ns/multi-service-platform/sa/multi-service-platform-sa"]
+        namespaces: ["multi-service-platform"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/auth/*", "/health", "/ready", "/metrics"]
+  # Allow ingress gateway for direct access
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/auth/*", "/health", "/ready"]
+---
+# Authorization Policy - Ecommerce Service
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: ecommerce-service-policy
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: ecommerce-service
+  rules:
+  # Allow API Gateway and other services
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/multi-service-platform/sa/multi-service-platform-sa"
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+        namespaces: ["multi-service-platform", "istio-system"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        paths: ["/ecommerce/*", "/health", "/ready", "/metrics"]
+---
+# Authorization Policy - Payment Service (Strict)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: payment-service-policy
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: payment-service
+  rules:
+  # Only allow specific services to access payment service
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/multi-service-platform/sa/multi-service-platform-sa"
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+        namespaces: ["multi-service-platform", "istio-system"]
+  - to:
+    - operation:
+        methods: ["POST", "GET", "PUT"]  # No DELETE for security
+        paths: ["/payment/*", "/health", "/ready", "/metrics"]
+  # Additional security: require JWT token for payment operations
+  - when:
+    - key: request.headers[authorization]
+      values: ["Bearer *"]
+---
+# Authorization Policy - Taxi Service
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: taxi-service-policy
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: taxi-service
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/multi-service-platform/sa/multi-service-platform-sa"
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+        namespaces: ["multi-service-platform", "istio-system"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        paths: ["/taxi/*", "/health", "/ready", "/metrics"]
+---
+# Authorization Policy - Hotel Service
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: hotel-service-policy
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: hotel-service
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/multi-service-platform/sa/multi-service-platform-sa"
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+        namespaces: ["multi-service-platform", "istio-system"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        paths: ["/hotel/*", "/health", "/ready", "/metrics"]
+---
+# Authorization Policy - File Service (Upload restrictions)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: file-service-policy
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: file-service
+  rules:
+  - from:
+    - source:
+        principals: 
+        - "cluster.local/ns/multi-service-platform/sa/multi-service-platform-sa"
+        - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+        namespaces: ["multi-service-platform", "istio-system"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/files/*", "/health", "/ready", "/metrics"]
+  # Rate limiting for uploads
+  - when:
+    - key: request.headers[content-type]
+      values: ["multipart/form-data", "application/octet-stream"]
+---
+# Authorization Policy - Admin Service (Highly Restricted)
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: admin-service-policy
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: admin-service
+  rules:
+  # Only allow ingress gateway with admin authentication
+  - from:
+    - source:
+        principals: ["cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"]
+        namespaces: ["istio-system"]
+  - to:
+    - operation:
+        methods: ["GET", "POST", "PUT", "DELETE"]
+        paths: ["/admin/*", "/health", "/ready"]
+  # Require admin role in JWT
+  - when:
+    - key: request.auth.claims[role]
+      values: ["admin", "super-admin"]
+---
+# Request Authentication - JWT validation
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: jwt-auth
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  jwtRules:
+  - issuer: "https://yourplatform.com"
+    jwksUri: "https://yourplatform.com/.well-known/jwks.json"
+    audiences:
+    - "multi-service-platform"
+    forwardOriginalToken: true
+---
+# Request Authentication for Admin Services
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: admin-jwt-auth
+  namespace: multi-service-platform
+spec:
+  selector:
+    matchLabels:
+      app: admin-service
+  jwtRules:
+  - issuer: "https://admin.yourplatform.com"
+    jwksUri: "https://admin.yourplatform.com/.well-known/jwks.json"
+    audiences:
+    - "admin-platform"
+    forwardOriginalToken: true
+---
+# Service Entry for external dependencies
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: external-apis
+  namespace: multi-service-platform
+spec:
+  hosts:
+  - api.stripe.com
+  - api.sendgrid.com
+  - api.twilio.com
+  - s3.amazonaws.com
+  - googleapis.com
+  ports:
+  - number: 443
+    name: https
+    protocol: HTTPS
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+# Envoy Filter for additional security headers
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: security-headers
+  namespace: multi-service-platform
+spec:
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.local_ratelimit
+        typed_config:
+          "@type": type.googleapis.com/udpa.type.v1.TypedStruct
+          type_url: type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+          value:
+            stat_prefix: local_rate_limiter
+            token_bucket:
+              max_tokens: 100
+              tokens_per_fill: 100
+              fill_interval: 60s
+            filter_enabled:
+              runtime_key: local_rate_limit_enabled
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            filter_enforced:
+              runtime_key: local_rate_limit_enforced
+              default_value:
+                numerator: 100
+                denominator: HUNDRED
+            response_headers_to_add:
+            - append: false
+              header:
+                key: x-local-rate-limit
+                value: 'true'

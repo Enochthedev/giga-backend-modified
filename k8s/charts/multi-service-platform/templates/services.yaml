@@ -1,0 +1,51 @@
+{{- if .Values.apiGateway.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "api-gateway-service" "serviceConfig" .Values.apiGateway "global" .) }}
+{{- end }}
+
+{{- if .Values.authenticationService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "authentication-service" "serviceConfig" .Values.authenticationService "global" .) }}
+{{- end }}
+
+{{- if .Values.ecommerceService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "ecommerce-service" "serviceConfig" .Values.ecommerceService "global" .) }}
+{{- end }}
+
+{{- if .Values.paymentService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "payment-service" "serviceConfig" .Values.paymentService "global" .) }}
+{{- end }}
+
+{{- if .Values.taxiService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "taxi-service" "serviceConfig" .Values.taxiService "global" .) }}
+{{- end }}
+
+{{- if .Values.hotelService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "hotel-service" "serviceConfig" .Values.hotelService "global" .) }}
+{{- end }}
+
+{{- if .Values.advertisementService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "advertisement-service" "serviceConfig" .Values.advertisementService "global" .) }}
+{{- end }}
+
+{{- if .Values.notificationService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "notification-service" "serviceConfig" .Values.notificationService "global" .) }}
+{{- end }}
+
+{{- if .Values.fileService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "file-service" "serviceConfig" .Values.fileService "global" .) }}
+{{- end }}
+
+{{- if .Values.searchService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "search-service" "serviceConfig" .Values.searchService "global" .) }}
+{{- end }}
+
+{{- if .Values.adminService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "admin-service" "serviceConfig" .Values.adminService "global" .) }}
+{{- end }}
+
+{{- if .Values.analyticsService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "analytics-service" "serviceConfig" .Values.analyticsService "global" .) }}
+{{- end }}
+
+{{- if .Values.messagingService.enabled }}
+{{- include "multi-service-platform.service" (dict "serviceName" "messaging-service" "serviceConfig" .Values.messagingService "global" .) }}
+{{- end }}
