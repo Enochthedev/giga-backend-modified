@@ -6,7 +6,7 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY hotel-service/package.json hotel-service/pnpm-lock.yaml hotel-service/tsconfig.json ./
+COPY services/hotel-service/package.json services/hotel-service/pnpm-lock.yaml services/hotel-service/tsconfig.json ./
 RUN pnpm install --frozen-lockfile
 
 # Copy source code

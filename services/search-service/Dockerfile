@@ -8,14 +8,14 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files
-COPY package*.json pnpm-lock.yaml ./
-COPY tsconfig.json ./
+COPY services/search-service/package*.json services/search-service/pnpm-lock.yaml ./
+COPY services/search-service/tsconfig.json ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy source code
-COPY src/ ./src/
+COPY services/search-service/src/ ./src/
 
 # Build the application
 RUN pnpm run build
@@ -34,7 +34,7 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S searchservice -u 1001
 
 # Copy package files
-COPY package*.json pnpm-lock.yaml ./
+COPY services/search-service/package*.json services/search-service/pnpm-lock.yaml ./
 
 # Install only production dependencies
 RUN pnpm install --frozen-lockfile --prod

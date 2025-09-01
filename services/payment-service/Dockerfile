@@ -6,11 +6,11 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY payment-service/package.json payment-service/pnpm-lock.yaml payment-service/tsconfig.json ./
+COPY services/payment-service/package.json services/payment-service/pnpm-lock.yaml services/payment-service/tsconfig.json ./
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
-COPY payment-service/src ./src
+COPY services/payment-service/src ./src
 
 # Build the service
 RUN pnpm run build

@@ -8,14 +8,14 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files
-COPY package*.json pnpm-lock.yaml ./
-COPY tsconfig.json ./
+COPY services/taxi-service/package*.json services/taxi-service/pnpm-lock.yaml ./
+COPY services/taxi-service/tsconfig.json ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy source code
-COPY src/ ./src/
+COPY services/taxi-service/src/ ./src/
 
 # Build the application
 RUN pnpm run build

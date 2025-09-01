@@ -6,13 +6,14 @@ RUN npm install -g pnpm
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json pnpm-lock.yaml ./
+# Copy package files from service directory
+COPY services/notification-service/package*.json ./
+COPY services/notification-service/pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy source code
-COPY src/ ./src/
-COPY tsconfig.json ./
+# Copy source code from service directory
+COPY services/notification-service/src/ ./src/
+COPY services/notification-service/tsconfig.json ./
 
 # Build the application
 RUN pnpm run build

@@ -6,7 +6,7 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY ecommerce-backend/package.json ecommerce-backend/pnpm-lock.yaml ecommerce-backend/tsconfig.json ./
+COPY services/ecommerce-service/package.json services/ecommerce-service/pnpm-lock.yaml services/ecommerce-service/tsconfig.json ./
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
