@@ -58,6 +58,7 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:build": "docker-compose build",
+    "docker:build:clean": "./scripts/docker-clean-build.sh",
     "docker:logs": "docker-compose logs -f",
     "docker:ps": "docker-compose ps",
     "health:check": "curl -f http://localhost:3000/health",
