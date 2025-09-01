@@ -1,0 +1,16 @@
+packages:
+  # Shared packages
+  - 'packages/*'
+  
+  # Modern services
+  - 'services/*'
+  
+  # Legacy services (for migration)
+  - 'ecommerce-backend'
+  - 'hotel-service'
+  - 'advertisement-service'
+  - 'giga_taxi_main'
+  - 'giga_taxi_driver'
+  
+  # Test suites
+  - 'tests'
