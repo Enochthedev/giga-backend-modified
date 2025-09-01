@@ -29,8 +29,8 @@ check_dockerfile() {
         return 0
     fi
     
-    # Check if COPY commands use correct service paths
-    local incorrect_copies=$(grep -n "COPY [^/].*package" "$service_path/Dockerfile" | grep -v "services/$service_name" | grep -v "packages/common" | grep -v "tsconfig.json")
+    # Check if COPY commands use correct service paths (exclude COPY --from=builder)
+    local incorrect_copies=$(grep -n "COPY [^-].*package" "$service_path/Dockerfile" | grep -v "services/$service_name" | grep -v "packages/common" | grep -v "tsconfig.json")
     
     if [ -n "$incorrect_copies" ]; then
         echo -e "${RED}❌ Incorrect paths${NC}"
