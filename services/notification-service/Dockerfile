@@ -1,25 +1,8 @@
-# Multi-stage build for notification service
-FROM node:18-alpine AS builder
+# Single-stage build for notification service (development)
+FROM node:18-alpine
 
-# Install pnpm
-RUN npm install -g pnpm
-
-WORKDIR /app
-
-# Copy package files from service directory
-COPY services/notification-service/package*.json ./
-COPY services/notification-service/pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
-
-# Copy source code from service directory
-COPY services/notification-service/src/ ./src/
-COPY services/notification-service/tsconfig.json ./
-
-# Build the application
-RUN pnpm run build
-
-# Production stage
-FROM node:18-alpine AS production
+# Install pnpm and ts-node for development
+RUN npm install -g pnpm ts-node
 
 WORKDIR /app
 
@@ -27,10 +10,17 @@ WORKDIR /app
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S notification -u 1001
 
-# Copy built application and dependencies
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
+# Copy package files from service directory
+COPY services/notification-service/package*.json ./
+# Copy pnpm-lock.yaml if it exists, otherwise skip
+COPY services/notification-service/pnpm-lock.yaml* ./
+
+# Install all dependencies (including dev dependencies for ts-node)
+RUN pnpm install
+
+# Copy source code and config
+COPY services/notification-service/src/ ./src/
+COPY services/notification-service/tsconfig.json ./
 
 # Change ownership to non-root user
 RUN chown -R notification:nodejs /app
@@ -43,5 +33,5 @@ EXPOSE 3006
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3006/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Start the application
-CMD ["node", "dist/app.js"]
+# Start the application in development mode with ts-node
+CMD ["pnpm", "run", "dev"]

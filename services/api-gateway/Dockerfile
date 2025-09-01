@@ -6,7 +6,8 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files
-COPY services/api-gateway/package*.json pnpm-lock.yaml ./
+COPY services/api-gateway/package*.json ./
+COPY services/api-gateway/pnpm-lock.yaml* ./
 COPY packages/common/package*.json ./packages/common/
 
 # Install dependencies

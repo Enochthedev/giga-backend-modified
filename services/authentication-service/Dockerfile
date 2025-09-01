@@ -6,7 +6,8 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files
-COPY services/authentication-service/package*.json pnpm-lock.yaml ./
+COPY services/authentication-service/package*.json ./
+COPY services/authentication-service/pnpm-lock.yaml* ./
 COPY packages/common/package*.json ./packages/common/
 
 # Install dependencies

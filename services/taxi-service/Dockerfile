@@ -8,7 +8,8 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files
-COPY services/taxi-service/package*.json services/taxi-service/pnpm-lock.yaml ./
+COPY services/taxi-service/package*.json ./
+COPY services/taxi-service/pnpm-lock.yaml* ./
 COPY services/taxi-service/tsconfig.json ./
 
 # Install dependencies
@@ -34,10 +35,11 @@ RUN adduser -S taxi-service -u 1001
 WORKDIR /app
 
 # Copy package files
-COPY package*.json pnpm-lock.yaml ./
+COPY services/taxi-service/package*.json ./
+COPY services/taxi-service/pnpm-lock.yaml* ./
 
 # Install only production dependencies
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist

@@ -9,11 +9,12 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files
-COPY package*.json pnpm-lock.yaml ./
-COPY tsconfig.json ./
+COPY services/analytics-service/package*.json ./
+COPY services/analytics-service/pnpm-lock.yaml* ./
+COPY services/analytics-service/tsconfig.json ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Copy source code
 COPY src/ ./src/
@@ -35,10 +36,11 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S analytics -u 1001
 
 # Copy package files
-COPY package*.json pnpm-lock.yaml ./
+COPY services/analytics-service/package*.json ./
+COPY services/analytics-service/pnpm-lock.yaml* ./
 
 # Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist

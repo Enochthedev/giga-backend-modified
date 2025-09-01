@@ -6,8 +6,9 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY services/advertisement-service/package.json services/advertisement-service/pnpm-lock.yaml services/advertisement-service/tsconfig.json ./
-RUN pnpm install --frozen-lockfile
+COPY services/advertisement-service/package.json services/advertisement-service/tsconfig.json ./
+COPY services/advertisement-service/pnpm-lock.yaml* ./
+RUN pnpm install
 
 # Copy source code
 COPY advertisement-service/src ./src

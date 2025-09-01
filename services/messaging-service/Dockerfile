@@ -8,11 +8,12 @@ RUN npm install -g pnpm
 WORKDIR /app
 
 # Copy package files
-COPY package*.json pnpm-lock.yaml ./
-COPY tsconfig.json ./
+COPY services/messaging-service/package*.json ./
+COPY services/messaging-service/pnpm-lock.yaml* ./
+COPY services/messaging-service/tsconfig.json ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Copy source code
 COPY src/ ./src/
@@ -34,10 +35,11 @@ RUN addgroup -g 1001 -S nodejs && \
     adduser -S messaging -u 1001
 
 # Copy package files
-COPY package*.json pnpm-lock.yaml ./
+COPY services/messaging-service/package*.json ./
+COPY services/messaging-service/pnpm-lock.yaml* ./
 
 # Install only production dependencies
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
