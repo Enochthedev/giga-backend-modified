@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import rideController from '../controllers/ride.controller';
 
-const router = Router();
+const router: Router = Router();
 
 // Public routes
 router.post('/estimate', rideController.calculateEstimate);

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { logger } from '@giga/common';
+import logger from '../utils/logger';
 
 export interface FuelPriceData {
     price: number;
@@ -42,9 +42,9 @@ export class FuelPricingService {
         if (this.cachedFuelPrice && this.lastCacheUpdate) {
             const cacheAge = Date.now() - this.lastCacheUpdate.getTime();
             const cacheAgeMinutes = cacheAge / (1000 * 60);
-            
+
             if (cacheAgeMinutes < this.cacheValidityMinutes) {
-                logger.info('📊 Using cached fuel price', { 
+                logger.info('📊 Using cached fuel price', {
                     price: this.cachedFuelPrice.price,
                     age: `${Math.round(cacheAgeMinutes)} minutes`
                 });
@@ -57,17 +57,17 @@ export class FuelPricingService {
             const fuelPrice = await this.fetchFuelPriceFromAPI();
             this.cachedFuelPrice = fuelPrice;
             this.lastCacheUpdate = new Date();
-            
-            logger.info('📊 Fuel price updated from API', { 
+
+            logger.info('📊 Fuel price updated from API', {
                 price: fuelPrice.price,
                 currency: fuelPrice.currency,
                 source: fuelPrice.source
             });
-            
+
             return fuelPrice;
         } catch (error) {
             logger.warn('⚠️ Failed to fetch fuel price from API, using fallback', { error });
-            
+
             // Return fallback fuel price
             const fallbackPrice: FuelPriceData = {
                 price: 1.50, // Default fallback price
@@ -75,10 +75,10 @@ export class FuelPricingService {
                 lastUpdated: new Date(),
                 source: 'fallback'
             };
-            
+
             this.cachedFuelPrice = fallbackPrice;
             this.lastCacheUpdate = new Date();
-            
+
             return fallbackPrice;
         }
     }
@@ -92,7 +92,7 @@ export class FuelPricingService {
         baseFare: number = 2.50
     ): Promise<FuelBasedPricing> {
         const fuelPrice = await this.getCurrentFuelPrice();
-        
+
         // Base rates per km for different vehicle types
         const baseRatesPerKm: { [key: string]: number } = {
             regular: 0.50,
@@ -102,18 +102,18 @@ export class FuelPricingService {
         };
 
         const baseRatePerKm = baseRatesPerKm[vehicleType.toLowerCase()] || baseRatesPerKm.regular;
-        
+
         // Calculate fuel multiplier based on current fuel price
         // Assume baseline fuel price is $1.50 per liter
         const baselineFuelPrice = 1.50;
         const fuelMultiplier = fuelPrice.price / baselineFuelPrice;
-        
+
         // Calculate distance cost with fuel adjustment
         const distanceCost = distanceKm * baseRatePerKm * fuelMultiplier;
-        
+
         // Calculate total fare
         const totalFare = baseFare + distanceCost;
-        
+
         const pricing: FuelBasedPricing = {
             baseFare,
             perKmRate: baseRatePerKm,
@@ -228,15 +228,15 @@ export class FuelPricingService {
     private generateMockFuelTrends(days: number): FuelPriceData[] {
         const trends: FuelPriceData[] = [];
         const basePrice = 1.50;
-        
+
         for (let i = days; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i);
-            
+
             // Add some realistic variation
             const variation = (Math.random() - 0.5) * 0.3; // ±15% variation
             const price = basePrice + variation;
-            
+
             trends.push({
                 price: Math.round(price * 100) / 100,
                 currency: 'USD',
@@ -244,7 +244,7 @@ export class FuelPricingService {
                 source: 'mock'
             });
         }
-        
+
         return trends;
     }
 
@@ -260,12 +260,12 @@ export class FuelPricingService {
     }> {
         const trends = await this.getFuelPriceTrends(7);
         const prices = trends.map(t => t.price);
-        
+
         const current = prices[prices.length - 1];
         const average = prices.reduce((sum, price) => sum + price, 0) / prices.length;
         const min = Math.min(...prices);
         const max = Math.max(...prices);
-        
+
         // Determine trend
         let trend: 'rising' | 'falling' | 'stable' = 'stable';
         if (prices.length >= 2) {
@@ -274,7 +274,7 @@ export class FuelPricingService {
                 trend = recentChange > 0 ? 'rising' : 'falling';
             }
         }
-        
+
         return {
             current,
             average: Math.round(average * 100) / 100,

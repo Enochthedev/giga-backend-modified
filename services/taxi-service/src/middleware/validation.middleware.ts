@@ -111,3 +111,6 @@ export const validateLocationUpdate = validate(locationUpdateSchema);
 export const validateRideRequest = validate(rideRequestSchema);
 export const validateRideAcceptance = validate(rideAcceptanceSchema);
 export const validateRideRating = validate(rideRatingSchema);
+
+// Default export for backward compatibility
+export default validate;

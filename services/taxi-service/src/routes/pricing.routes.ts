@@ -2,7 +2,7 @@ import { Router } from 'express';
 import pricingController from '../controllers/pricing.controller';
 import validationMiddleware from '../middleware/validation.middleware';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * @route POST /api/pricing/calculate

@@ -1,32 +1,71 @@
-FROM node:18-alpine
+# Data Governance Admin Service Dockerfile
+# Multi-stage build for production optimization and security
 
+# Build stage
+FROM node:18-alpine AS builder
+
+# Install build dependencies and pnpm
+RUN apk add --no-cache python3 make g++ && \
+    npm install -g pnpm
+
+# Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY packages/common/package*.json ./packages/common/
+# Copy package files for dependency installation
+COPY services/data-governance-admin/package*.json ./
+COPY services/data-governance-admin/pnpm-lock.yaml* ./
+COPY services/data-governance-admin/tsconfig.json ./
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including dev dependencies for build)
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
-COPY packages/common ./packages/common
-COPY services/data-governance-admin ./services/data-governance-admin
+COPY services/data-governance-admin/src/ ./src/
 
-# Build the common package
-RUN cd packages/common && npm run build
+# Build the application
+RUN pnpm run build
 
-# Build the service
-RUN cd services/data-governance-admin && npm run build
+# Production stage
+FROM node:18-alpine AS production
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nodejs -u 1001
+# Install runtime dependencies and security tools
+RUN apk add --no-cache dumb-init && \
+    npm install -g pnpm
 
-# Change ownership
-RUN chown -R nodejs:nodejs /app
-USER nodejs
+# Create non-root user with specific UID/GID for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S govuser -u 1001 -G nodejs
 
+# Set working directory
+WORKDIR /app
+
+# Copy package files for production dependency installation
+COPY services/data-governance-admin/package*.json ./
+COPY services/data-governance-admin/pnpm-lock.yaml* ./
+
+# Install only production dependencies
+RUN pnpm install --prod --frozen-lockfile && \
+    pnpm store prune
+
+# Copy built application from builder stage
+COPY --from=builder --chown=govuser:nodejs /app/dist ./dist
+
+# Create necessary directories with proper ownership
+RUN mkdir -p logs tmp && \
+    chown -R govuser:nodejs /app
+
+# Switch to non-root user
+USER govuser
+
+# Expose port
 EXPOSE 3020
 
-CMD ["node", "services/data-governance-admin/dist/index.js"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3020/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
+CMD ["node", "dist/app.js"]

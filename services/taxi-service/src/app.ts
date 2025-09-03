@@ -26,7 +26,7 @@ import httpStatus from 'http-status';
 // Load environment variables
 dotenv.config();
 
-const app = express();
+const app: express.Application = express();
 const server = createServer(app);
 const port = process.env.PORT || 3005;
 

@@ -1,0 +1,263 @@
+# Docker Compose Override for Development
+# This file provides development-specific configurations for the standardized Dockerfiles
+
+version: '3.8'
+
+services:
+  # API Gateway - Development Configuration
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+      target: builder  # Use builder stage for development
+    volumes:
+      - ./services/api-gateway/src:/app/src:ro
+      - ./services/api-gateway/package.json:/app/package.json:ro
+      - ./services/api-gateway/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Debug port
+
+  # Authentication Service - Development Configuration
+  authentication-service:
+    build:
+      context: .
+      dockerfile: services/authentication-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/authentication-service/src:/app/src:ro
+      - ./services/authentication-service/package.json:/app/package.json:ro
+      - ./services/authentication-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3001:3001"
+      - "9230:9229"
+
+  # E-commerce Service - Development Configuration
+  ecommerce-service:
+    build:
+      context: .
+      dockerfile: services/ecommerce-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/ecommerce-service/src:/app/src:ro
+      - ./services/ecommerce-service/package.json:/app/package.json:ro
+      - ./services/ecommerce-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3002:3002"
+      - "9231:9229"
+
+  # Payment Service - Development Configuration
+  payment-service:
+    build:
+      context: .
+      dockerfile: services/payment-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/payment-service/src:/app/src:ro
+      - ./services/payment-service/package.json:/app/package.json:ro
+      - ./services/payment-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3003:3003"
+      - "9232:9229"
+
+  # Taxi Service - Development Configuration
+  taxi-service:
+    build:
+      context: .
+      dockerfile: services/taxi-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/taxi-service/src:/app/src:ro
+      - ./services/taxi-service/package.json:/app/package.json:ro
+      - ./services/taxi-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3004:3004"
+      - "9233:9229"
+
+  # Hotel Service - Development Configuration
+  hotel-service:
+    build:
+      context: .
+      dockerfile: services/hotel-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/hotel-service/src:/app/src:ro
+      - ./services/hotel-service/package.json:/app/package.json:ro
+      - ./services/hotel-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3005:3005"
+      - "9234:9229"
+
+  # Advertisement Service - Development Configuration
+  advertisement-service:
+    build:
+      context: .
+      dockerfile: services/advertisement-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/advertisement-service/src:/app/src:ro
+      - ./services/advertisement-service/package.json:/app/package.json:ro
+      - ./services/advertisement-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3006:3006"
+      - "9235:9229"
+
+  # Notification Service - Development Configuration
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/notification-service/src:/app/src:ro
+      - ./services/notification-service/package.json:/app/package.json:ro
+      - ./services/notification-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3007:3007"
+      - "9236:9229"
+
+  # File Service - Development Configuration
+  file-service:
+    build:
+      context: .
+      dockerfile: services/file-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/file-service/src:/app/src:ro
+      - ./services/file-service/package.json:/app/package.json:ro
+      - ./services/file-service/tsconfig.json:/app/tsconfig.json:ro
+      - file_uploads:/app/uploads  # Persistent uploads in development
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3008:3008"
+      - "9237:9229"
+
+  # Search Service - Development Configuration
+  search-service:
+    build:
+      context: .
+      dockerfile: services/search-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/search-service/src:/app/src:ro
+      - ./services/search-service/package.json:/app/package.json:ro
+      - ./services/search-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3009:3009"
+      - "9238:9229"
+
+  # Admin Service - Development Configuration
+  admin-service:
+    build:
+      context: .
+      dockerfile: services/admin-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/admin-service/src:/app/src:ro
+      - ./services/admin-service/package.json:/app/package.json:ro
+      - ./services/admin-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3010:3010"
+      - "9239:9229"
+
+  # Analytics Service - Development Configuration
+  analytics-service:
+    build:
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/analytics-service/src:/app/src:ro
+      - ./services/analytics-service/package.json:/app/package.json:ro
+      - ./services/analytics-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3011:3011"
+      - "9240:9229"
+
+  # Messaging Service - Development Configuration
+  messaging-service:
+    build:
+      context: .
+      dockerfile: services/messaging-service/Dockerfile
+      target: builder
+    volumes:
+      - ./services/messaging-service/src:/app/src:ro
+      - ./services/messaging-service/package.json:/app/package.json:ro
+      - ./services/messaging-service/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3012:3012"
+      - "9241:9229"
+
+  # Data Governance Admin - Development Configuration
+  data-governance-admin:
+    build:
+      context: .
+      dockerfile: services/data-governance-admin/Dockerfile
+      target: builder
+    volumes:
+      - ./services/data-governance-admin/src:/app/src:ro
+      - ./services/data-governance-admin/package.json:/app/package.json:ro
+      - ./services/data-governance-admin/tsconfig.json:/app/tsconfig.json:ro
+    environment:
+      - NODE_ENV=development
+      - DEBUG=*
+    command: ["pnpm", "run", "dev"]
+    ports:
+      - "3020:3020"
+      - "9242:9229"
+
+# Development-specific volumes
+volumes:
+  file_uploads:
+    driver: local

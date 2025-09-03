@@ -2,7 +2,7 @@ import { Router } from 'express';
 import analyticsController from '../controllers/analytics.controller';
 import validationMiddleware from '../middleware/validation.middleware';
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * @route GET /api/analytics/:entityId/rides

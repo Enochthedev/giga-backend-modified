@@ -1,20 +1,26 @@
-# Multi-stage build for production optimization
+# File Service Dockerfile
+# Multi-stage build for production optimization and security
+
+# Build stage
 FROM node:18-alpine AS builder
 
-# Install pnpm and build dependencies for native modules
-RUN npm install -g pnpm && apk add --no-cache python3 make g++ vips-dev
+# Install build dependencies, pnpm, and native module dependencies
+RUN apk add --no-cache python3 make g++ vips-dev && \
+    npm install -g pnpm
 
+# Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files for dependency installation
 COPY services/file-service/package*.json ./
 COPY services/file-service/pnpm-lock.yaml* ./
+COPY services/file-service/tsconfig.json ./
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --prod
+# Install all dependencies (including dev dependencies for build)
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
-COPY . .
+COPY services/file-service/src/ ./src/
 
 # Build the application
 RUN pnpm run build
@@ -22,30 +28,44 @@ RUN pnpm run build
 # Production stage
 FROM node:18-alpine AS production
 
-# Install runtime dependencies
-RUN apk add --no-cache vips
+# Install runtime dependencies and security tools
+RUN apk add --no-cache dumb-init vips && \
+    npm install -g pnpm
 
-# Create app directory
+# Create non-root user with specific UID/GID for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S fileuser -u 1001 -G nodejs
+
+# Set working directory
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S fileservice -u 1001
+# Copy package files for production dependency installation
+COPY services/file-service/package*.json ./
+COPY services/file-service/pnpm-lock.yaml* ./
+
+# Install only production dependencies
+RUN pnpm install --prod --frozen-lockfile && \
+    pnpm store prune
 
 # Copy built application from builder stage
-COPY --from=builder --chown=fileservice:nodejs /app/dist ./dist
-COPY --from=builder --chown=fileservice:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=fileservice:nodejs /app/package*.json ./
+COPY --from=builder --chown=fileuser:nodejs /app/dist ./dist
+
+# Create necessary directories with proper ownership
+RUN mkdir -p logs tmp uploads && \
+    chown -R fileuser:nodejs /app
 
 # Switch to non-root user
-USER fileservice
+USER fileuser
 
 # Expose port
-EXPOSE 3007
+EXPOSE 3008
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3007/api/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+    CMD node -e "require('http').get('http://localhost:3008/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
 CMD ["node", "dist/app.js"]

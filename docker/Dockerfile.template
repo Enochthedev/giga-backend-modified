@@ -1,5 +1,5 @@
-# Advertisement Service Dockerfile
-# Multi-stage build for production optimization and security
+# Standardized Multi-Stage Dockerfile Template
+# This template provides security best practices, build optimization, and consistency
 
 # Build stage
 FROM node:18-alpine AS builder
@@ -12,15 +12,13 @@ RUN apk add --no-cache python3 make g++ && \
 WORKDIR /app
 
 # Copy package files for dependency installation
-COPY services/advertisement-service/package*.json ./
-COPY services/advertisement-service/pnpm-lock.yaml* ./
-COPY services/advertisement-service/tsconfig.json ./
+COPY package*.json pnpm-lock.yaml* tsconfig.json ./
 
 # Install all dependencies (including dev dependencies for build)
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
-COPY services/advertisement-service/src/ ./src/
+COPY src/ ./src/
 
 # Build the application
 RUN pnpm run build
@@ -34,35 +32,34 @@ RUN apk add --no-cache dumb-init && \
 
 # Create non-root user with specific UID/GID for security
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S adsuser -u 1001 -G nodejs
+    adduser -S appuser -u 1001 -G nodejs
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files for production dependency installation
-COPY services/advertisement-service/package*.json ./
-COPY services/advertisement-service/pnpm-lock.yaml* ./
+COPY package*.json pnpm-lock.yaml* ./
 
 # Install only production dependencies
 RUN pnpm install --prod --frozen-lockfile && \
     pnpm store prune
 
 # Copy built application from builder stage
-COPY --from=builder --chown=adsuser:nodejs /app/dist ./dist
+COPY --from=builder --chown=appuser:nodejs /app/dist ./dist
 
 # Create necessary directories with proper ownership
 RUN mkdir -p logs tmp && \
-    chown -R adsuser:nodejs /app
+    chown -R appuser:nodejs /app
 
 # Switch to non-root user
-USER adsuser
+USER appuser
 
-# Expose port
-EXPOSE 3006
+# Expose port (to be overridden in specific Dockerfiles)
+EXPOSE ${PORT:-3000}
 
-# Health check
+# Health check with configurable endpoint and port
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3006/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
+    CMD node -e "require('http').get('http://localhost:${PORT:-3000}${HEALTH_ENDPOINT:-/health}', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
 # Use dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]

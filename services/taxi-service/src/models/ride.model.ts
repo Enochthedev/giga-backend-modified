@@ -56,6 +56,14 @@ interface IRide extends Document {
     };
     createdAt: Date;
     updatedAt: Date;
+
+    // Instance methods
+    isActive(): boolean;
+    isCompleted(): boolean;
+    isCancelled(): boolean;
+    canBeCancelled(): boolean;
+    canBeRated(): boolean;
+    getDuration(): number | null;
 }
 
 interface IRideModel extends Model<IRide> {

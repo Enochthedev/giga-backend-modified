@@ -9,12 +9,15 @@ module.exports = {
     collectCoverageFrom: [
         'src/**/*.ts',
         '!src/**/*.d.ts',
-        '!src/tests/**',
-        '!src/app.ts',
+        '!src/**/*.test.ts',
+        '!src/**/*.spec.ts',
+        '!src/tests/**/*',
     ],
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
     setupFilesAfterEnv: ['<rootDir>/src/tests/setup.ts'],
-    testTimeout: 30000,
-    maxWorkers: 1, // Run tests sequentially to avoid database conflicts
+    testTimeout: 10000,
+    moduleNameMapping: {
+        '^@giga/common(.*)$': '<rootDir>/../../packages/common/src$1',
+    },
 };

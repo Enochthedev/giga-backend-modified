@@ -11,13 +11,13 @@ module.exports = {
         '!src/**/*.d.ts',
         '!src/**/*.test.ts',
         '!src/**/*.spec.ts',
+        '!src/tests/**/*',
     ],
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
-    moduleNameMapping: {
-        '^@giga/common$': '<rootDir>/../../packages/common/src',
-        '^@giga/common/(.*)$': '<rootDir>/../../packages/common/src/$1',
-    },
     setupFilesAfterEnv: ['<rootDir>/src/tests/setup.ts'],
     testTimeout: 10000,
+    moduleNameMapping: {
+        '^@giga/common(.*)$': '<rootDir>/../../packages/common/src$1',
+    },
 };

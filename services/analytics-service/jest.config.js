@@ -1,33 +1,23 @@
 module.exports = {
     preset: 'ts-jest',
     testEnvironment: 'node',
-    setupFilesAfterEnv: ['<rootDir>/src/tests/setup.ts'],
-    testMatch: [
-        '**/__tests__/**/*.ts',
-        '**/?(*.)+(spec|test).ts'
-    ],
+    roots: ['<rootDir>/src'],
+    testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
+    transform: {
+        '^.+\\.ts$': 'ts-jest',
+    },
     collectCoverageFrom: [
         'src/**/*.ts',
         '!src/**/*.d.ts',
-        '!src/tests/**',
-        '!src/app.ts'
+        '!src/**/*.test.ts',
+        '!src/**/*.spec.ts',
+        '!src/tests/**/*',
     ],
     coverageDirectory: 'coverage',
-    coverageReporters: [
-        'text',
-        'lcov',
-        'html'
-    ],
-    moduleFileExtensions: [
-        'ts',
-        'tsx',
-        'js',
-        'jsx',
-        'json'
-    ],
-    transform: {
-        '^.+\\.ts$': 'ts-jest'
+    coverageReporters: ['text', 'lcov', 'html'],
+    setupFilesAfterEnv: ['<rootDir>/src/tests/setup.ts'],
+    testTimeout: 10000,
+    moduleNameMapping: {
+        '^@giga/common(.*)$': '<rootDir>/../../packages/common/src$1',
     },
-    testTimeout: 30000,
-    verbose: true
 };

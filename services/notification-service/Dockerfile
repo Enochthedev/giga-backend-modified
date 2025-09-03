@@ -1,37 +1,71 @@
-# Single-stage build for notification service (development)
-FROM node:18-alpine
+# Notification Service Dockerfile
+# Multi-stage build for production optimization and security
 
-# Install pnpm and ts-node for development
-RUN npm install -g pnpm ts-node
+# Build stage
+FROM node:18-alpine AS builder
 
+# Install build dependencies and pnpm
+RUN apk add --no-cache python3 make g++ && \
+    npm install -g pnpm
+
+# Set working directory
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S notification -u 1001
-
-# Copy package files from service directory
+# Copy package files for dependency installation
 COPY services/notification-service/package*.json ./
-# Copy pnpm-lock.yaml if it exists, otherwise skip
 COPY services/notification-service/pnpm-lock.yaml* ./
-
-# Install all dependencies (including dev dependencies for ts-node)
-RUN pnpm install
-
-# Copy source code and config
-COPY services/notification-service/src/ ./src/
 COPY services/notification-service/tsconfig.json ./
 
-# Change ownership to non-root user
-RUN chown -R notification:nodejs /app
-USER notification
+# Install all dependencies (including dev dependencies for build)
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY services/notification-service/src/ ./src/
+
+# Build the application
+RUN pnpm run build
+
+# Production stage
+FROM node:18-alpine AS production
+
+# Install runtime dependencies and security tools
+RUN apk add --no-cache dumb-init && \
+    npm install -g pnpm
+
+# Create non-root user with specific UID/GID for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S notifuser -u 1001 -G nodejs
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files for production dependency installation
+COPY services/notification-service/package*.json ./
+COPY services/notification-service/pnpm-lock.yaml* ./
+
+# Install only production dependencies
+RUN pnpm install --prod --frozen-lockfile && \
+    pnpm store prune
+
+# Copy built application from builder stage
+COPY --from=builder --chown=notifuser:nodejs /app/dist ./dist
+
+# Create necessary directories with proper ownership
+RUN mkdir -p logs tmp && \
+    chown -R notifuser:nodejs /app
+
+# Switch to non-root user
+USER notifuser
 
 # Expose port
-EXPOSE 3006
+EXPOSE 3007
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3006/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+    CMD node -e "require('http').get('http://localhost:3007/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
 
-# Start the application in development mode with ts-node
-CMD ["pnpm", "run", "dev"]
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
+CMD ["node", "dist/app.js"]

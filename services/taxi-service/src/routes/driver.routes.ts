@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import driverController from '../controllers/driver.controller';
 
-const router = Router();
+const router: Router = Router();
 
 // Public routes
 router.post('/register', driverController.registerDriver);

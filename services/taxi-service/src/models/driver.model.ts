@@ -14,6 +14,15 @@ export enum VehicleType {
     MOTORCYCLE = 'motorcycle'
 }
 
+export enum RideStatus {
+    REQUESTED = 'requested',
+    ACCEPTED = 'accepted',
+    DRIVER_ARRIVED = 'driver_arrived',
+    IN_PROGRESS = 'in_progress',
+    COMPLETED = 'completed',
+    CANCELLED = 'cancelled'
+}
+
 interface IDriver extends Document {
     userId: string;
     firstName: string;
@@ -67,6 +76,12 @@ interface IDriver extends Document {
     rideOffers: Types.ObjectId[];
     createdAt: Date;
     updatedAt: Date;
+
+    // Instance methods
+    getFullName(): string;
+    isAvailable(): boolean;
+    canAcceptRide(): boolean;
+    updateLocation(longitude: number, latitude: number, heading?: number, speed?: number, accuracy?: number): void;
 }
 
 interface IDriverModel extends Model<IDriver> {

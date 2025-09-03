@@ -1,5 +1,5 @@
-import amqp from 'amqplib';
-import { logger } from '@giga/common';
+import * as amqp from 'amqplib';
+import logger from '../utils/logger';
 
 export interface EventPayload {
     name: string;
@@ -20,10 +20,10 @@ export class EventService {
         try {
             this.connection = await amqp.connect(this.rabbitmqUrl);
             this.channel = await this.connection.createChannel();
-            
+
             // Ensure the exchange exists
             await this.channel.assertExchange('giga_events', 'topic', { durable: true });
-            
+
             logger.info('✅ Event service connected to RabbitMQ');
         } catch (error) {
             logger.error('❌ Failed to connect to RabbitMQ:', error);
@@ -39,15 +39,15 @@ export class EventService {
         try {
             const message = JSON.stringify(event);
             const routingKey = `${event.service}.${event.name}`;
-            
+
             await this.channel.publish('giga_events', routingKey, Buffer.from(message), {
                 persistent: true,
                 timestamp: Date.now()
             });
 
-            logger.info(`📤 Event sent: ${event.name} to ${event.service}`, { 
-                eventName: event.name, 
-                targetService: event.service 
+            logger.info(`📤 Event sent: ${event.name} to ${event.service}`, {
+                eventName: event.name,
+                targetService: event.service
             });
         } catch (error) {
             logger.error('❌ Failed to send event:', error);
@@ -63,23 +63,23 @@ export class EventService {
         try {
             // Ensure queue exists
             await this.channel.assertQueue(queueName, { durable: true });
-            
+
             // Bind queue to exchange with routing key
             await this.channel.bindQueue(queueName, 'giga_events', routingKey);
-            
+
             // Consume messages
             await this.channel.consume(queueName, async (msg) => {
                 if (msg) {
                     try {
                         const event: EventPayload = JSON.parse(msg.content.toString());
                         await handler(event);
-                        
+
                         // Acknowledge message
                         this.channel?.ack(msg);
-                        
-                        logger.info(`📥 Event processed: ${event.name}`, { 
-                            eventName: event.name, 
-                            sourceService: event.service 
+
+                        logger.info(`📥 Event processed: ${event.name}`, {
+                            eventName: event.name,
+                            sourceService: event.service
                         });
                     } catch (error) {
                         logger.error('❌ Error processing event:', error);
@@ -119,7 +119,7 @@ export class EventService {
             service: 'taxi_driver',
             payload: rideData
         });
-        
+
         // Return mock data for backward compatibility
         return {
             distance: rideData.distance || 5000,
