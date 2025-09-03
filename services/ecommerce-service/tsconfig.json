@@ -12,19 +12,21 @@
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "node",
     "resolveJsonModule": true,
-    "declaration": true,
-    "declarationMap": true,
+    "declaration": false,
+    "declarationMap": false,
     "sourceMap": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "noImplicitAny": true,
-    "noImplicitReturns": true,
+    "noImplicitReturns": false,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "baseUrl": ".",
     "paths": {
       "@giga/common": ["../../packages/common/src"],
-      "@giga/common/*": ["../../packages/common/src/*"]
+      "@giga/common/*": ["../../packages/common/src/*"],
+      "@common": ["../../packages/common/dist"],
+      "@common/*": ["../../packages/common/dist/*"]
     }
   },
   "include": [

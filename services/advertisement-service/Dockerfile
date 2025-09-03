@@ -11,19 +11,28 @@ RUN apk add --no-cache python3 make g++ && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files for dependency installation
+# Copy shared common package and build it
+COPY packages/common ./packages/common
+RUN cd packages/common && pnpm install --no-frozen-lockfile && pnpm run build
+
+# Copy service package files
+WORKDIR /app/services/advertisement-service
 COPY services/advertisement-service/package*.json ./
 COPY services/advertisement-service/pnpm-lock.yaml* ./
 COPY services/advertisement-service/tsconfig.json ./
 
-# Install all dependencies (including dev dependencies for build)
-RUN pnpm install --frozen-lockfile
+# Rewrite @giga/common workspace dep to a local file path for container build
+RUN node -e "const fs=require('fs');const p=require('./package.json');if(p.dependencies&&p.dependencies['@giga/common']){p.dependencies['@giga/common']='file:../../packages/common';}fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
 
-# Copy source code
+# Install service deps (linked to vendored common)
+RUN pnpm install --no-frozen-lockfile
+
+# Copy source code and build
 COPY services/advertisement-service/src/ ./src/
-
-# Build the application
 RUN pnpm run build
+
+# Prune to production
+RUN pnpm prune --prod
 
 # Production stage
 FROM node:18-alpine AS production
@@ -39,16 +48,10 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy package files for production dependency installation
+# Copy built app and pruned node_modules
+COPY --from=builder --chown=adsuser:nodejs /app/services/advertisement-service/dist ./dist
+COPY --from=builder --chown=adsuser:nodejs /app/services/advertisement-service/node_modules ./node_modules
 COPY services/advertisement-service/package*.json ./
-COPY services/advertisement-service/pnpm-lock.yaml* ./
-
-# Install only production dependencies
-RUN pnpm install --prod --frozen-lockfile && \
-    pnpm store prune
-
-# Copy built application from builder stage
-COPY --from=builder --chown=adsuser:nodejs /app/dist ./dist
 
 # Create necessary directories with proper ownership
 RUN mkdir -p logs tmp && \

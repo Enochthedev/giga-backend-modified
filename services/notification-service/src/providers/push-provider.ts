@@ -9,8 +9,10 @@ export class PushProvider implements NotificationProvider {
             // Initialize Firebase Admin SDK
             const serviceAccountKey = process.env['FIREBASE_SERVICE_ACCOUNT_KEY'];
 
-            if (!serviceAccountKey) {
-                throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is required');
+            if (!serviceAccountKey || serviceAccountKey.trim() === '') {
+                console.warn('FIREBASE_SERVICE_ACCOUNT_KEY not provided, push notifications will be disabled');
+                this.messaging = null as any;
+                return;
             }
 
             const serviceAccount = JSON.parse(serviceAccountKey);
@@ -24,12 +26,25 @@ export class PushProvider implements NotificationProvider {
             this.messaging = admin.messaging();
         } catch (error) {
             console.error('Firebase initialization error:', error);
-            throw error;
+            console.warn('Push notifications will be disabled due to Firebase initialization failure');
+            this.messaging = null as any;
         }
     }
 
     async send(data: PushNotificationData): Promise<ProviderResponse> {
         try {
+            if (!this.messaging) {
+                return {
+                    success: false,
+                    error: 'Push notifications are disabled - Firebase not initialized',
+                    metadata: {
+                        platform: 'firebase',
+                        token: data.token,
+                        disabled: true
+                    }
+                };
+            }
+
             const message: admin.messaging.Message = {
                 token: data.token,
                 notification: {
@@ -80,6 +95,18 @@ export class PushProvider implements NotificationProvider {
 
     async sendMulticast(tokens: string[], title: string, body: string, data?: Record<string, any>): Promise<ProviderResponse> {
         try {
+            if (!this.messaging) {
+                return {
+                    success: false,
+                    error: 'Push notifications are disabled - Firebase not initialized',
+                    metadata: {
+                        successCount: 0,
+                        failureCount: tokens.length,
+                        disabled: true
+                    }
+                };
+            }
+
             const message: admin.messaging.MulticastMessage = {
                 tokens,
                 notification: {
@@ -129,6 +156,18 @@ export class PushProvider implements NotificationProvider {
 
     async sendToTopic(topic: string, title: string, body: string, data?: Record<string, any>): Promise<ProviderResponse> {
         try {
+            if (!this.messaging) {
+                return {
+                    success: false,
+                    error: 'Push notifications are disabled - Firebase not initialized',
+                    metadata: {
+                        topic,
+                        platform: 'firebase',
+                        disabled: true
+                    }
+                };
+            }
+
             const message: admin.messaging.Message = {
                 topic,
                 notification: {
